@@ -76,6 +76,12 @@ model StudentExamSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // ── Module 7: AI Proctoring risk fields ──────────────────────────────
+  riskScore            Float?   // 0–100 cumulative risk score
+  riskLevel            String?  // SAFE | LOW | MEDIUM | HIGH | CRITICAL
+  totalViolations      Int?     // total AI-detected violation events
+  proctoringReportPath String?  // path to session_report.txt on disk
+
   studentId String
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 

@@ -183,6 +183,12 @@ PHONE_CONFIDENCE_THRESHOLD: float = 0.45
 # Skipped frames reuse the last result (is_stale=True).
 PHONE_FRAME_SKIP: int = 5
 
+# When running in headless frame-server mode (frame_server.py), the browser
+# sends one frame every 2 seconds — effectively 0.5 fps.  Running YOLO on
+# every frame is correct here because there are very few frames.
+# frame_server.py overrides this to 1 automatically.
+PHONE_FRAME_SKIP_HEADLESS: int = 1
+
 # ── Visualisation ─────────────────────────────────────────────────────────────
 
 # BGR colour of phone bounding boxes.

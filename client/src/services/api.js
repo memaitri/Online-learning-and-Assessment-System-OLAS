@@ -64,6 +64,15 @@ export const violationAPI = {
   resetViolations: (sessionId) => api.delete(`/violations/session/${sessionId}`)
 };
 
+export const proctoringAPI = {
+  start:     (examId)           => api.post('/proctoring/start',     { examId }),
+  stop:      (examId)           => api.post('/proctoring/stop',      { examId }),
+  frame:     (examId, frame)    => api.post('/proctoring/frame',     { examId, frame }),
+  violation: (examId, type)     => api.post('/proctoring/violation', { examId, type }),
+  status:    (examId)           => api.get('/proctoring/status',     { params: { examId } }),
+  report:    (sessionId)        => api.get(`/proctoring/report/${sessionId}`),
+};
+
 export const userAPI = {
   getAll: () => api.get('/users'),
   getById: (id) => api.get(`/users/${id}`),

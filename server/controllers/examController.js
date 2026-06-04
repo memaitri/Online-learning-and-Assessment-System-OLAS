@@ -1,4 +1,5 @@
 import prisma from '../utils/db.js';
+import { stopSession, getReport } from '../proctoring/proctoringService.js';
 
 export const createExam = async (req, res) => {
   try {
@@ -189,15 +190,37 @@ export const submitExam = async (req, res) => {
       return res.status(400).json({ message: 'Exam already submitted' });
     }
 
+    // ── Stop the proctoring process and collect risk data ───────────────
+    stopSession(session.id);
+
+    // Wait up to 5 s for Python to write the final JSON
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    const reportData = getReport(session.id);
+    const riskFields = {};
+
+    if (reportData.found && reportData.finalData) {
+      const fd = reportData.finalData;
+      riskFields.riskScore            = fd.riskScore       ?? 0;
+      riskFields.riskLevel            = fd.riskLevel       ?? 'SAFE';
+      riskFields.totalViolations      = fd.totalViolations ?? 0;
+      riskFields.proctoringReportPath = reportData.reportPath ?? null;
+    }
+
     const updatedSession = await prisma.studentExamSession.update({
       where: { id: session.id },
       data: {
-        status: 'completed',
-        submittedAt: new Date()
+        status:      'completed',
+        submittedAt: new Date(),
+        ...riskFields,
       }
     });
 
-    res.json({ message: 'Exam submitted successfully', session: updatedSession });
+    res.json({
+      message: 'Exam submitted successfully',
+      session: updatedSession,
+      riskData: reportData.found ? reportData.finalData : null,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error submitting exam', error: error.message });
   }

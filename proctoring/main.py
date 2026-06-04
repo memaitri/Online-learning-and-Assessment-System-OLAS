@@ -28,6 +28,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import cv2
 
@@ -277,12 +278,70 @@ def _make_phone_violation_handler(logger: ViolationLogger, risk: RiskService):
 
 def main() -> None:
     """Bootstrap all subsystems, run the feed, and clean up on exit."""
+    import argparse, json, threading, time
+
+    # ── CLI args: accept --session-id so Node can pass the DB session ID ──
+    parser = argparse.ArgumentParser(description="OLAS Proctoring Engine")
+    parser.add_argument(
+        "--session-id",
+        type=str,
+        default=None,
+        help="Database session ID passed from the Node server",
+    )
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default=os.path.join(os.path.dirname(__file__), "session_output.json"),
+        help="Path where live session JSON is written for the backend to read",
+    )
+    args = parser.parse_args()
+
+    db_session_id = args.session_id
+    output_file   = args.output_file
+
     print("=" * 60)
     print("  OLAS Proctoring System — Module 7: Risk Scoring Engine")
+    if db_session_id:
+        print(f"  DB Session ID: {db_session_id}")
     print("=" * 60)
 
+    # ── Live JSON writer (runs every 2 seconds in background) ─────────────
+    _stop_writer = threading.Event()
+
+    def _write_output(
+        risk_svc: RiskService,
+        face_tracker: ViolationTracker,
+        gaze_vt,
+        head_vt,
+        phone_vt,
+    ) -> None:
+        """Write current state to session_output.json every 2 s."""
+        while not _stop_writer.is_set():
+            try:
+                snap = risk_svc.snapshot
+                counts = snap.event_counts
+                payload = {
+                    "sessionId":       db_session_id or risk_svc.session_id,
+                    "riskScore":       round(snap.score, 1),
+                    "riskLevel":       snap.level.value,
+                    "totalViolations": snap.total_events,
+                    "phoneDetections": counts.get("PHONE_DETECTED", 0),
+                    "multipleFaces":   counts.get("MULTIPLE_FACES", 0),
+                    "noFace":          counts.get("NO_FACE", 0),
+                    "lookingAway":     counts.get("LOOKING_AWAY", 0),
+                    "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                    "sessionSeconds":  round(snap.session_seconds, 1),
+                    "lastEvent":       snap.last_event,
+                    "status":          "running",
+                }
+                with open(output_file, "w", encoding="utf-8") as fh:
+                    json.dump(payload, fh)
+            except Exception:
+                pass
+            _stop_writer.wait(timeout=2.0)
+
     with ViolationLogger() as logger:
-        risk_service   = RiskService()
+        risk_service   = RiskService(session_id=db_session_id)
         risk_service.start()
 
         tracker        = ViolationTracker(
@@ -293,6 +352,17 @@ def main() -> None:
             on_violation=_make_head_violation_handler(logger, risk_service))
         phone_service  = PhoneService(
             on_violation=_make_phone_violation_handler(logger, risk_service))
+
+        # Start background JSON writer
+        writer_thread = threading.Thread(
+            target=_write_output,
+            args=(risk_service, tracker,
+                  gaze_tracker.violation_tracker,
+                  head_estimator.violation_tracker,
+                  phone_service.violation_tracker),
+            daemon=True,
+        )
+        writer_thread.start()
 
         try:
             phone_service.start()
@@ -328,12 +398,42 @@ def main() -> None:
             print("\n[Main] Interrupted by user.")
 
         finally:
+            # Stop background writer
+            _stop_writer.set()
+
             phone_service.stop()
             cv2.destroyAllWindows()
 
-            # ── Generate and print the session risk report ─────────────────
+            # Generate final report
             report = risk_service.end_session()
             risk_service.stop()
+
+            # Write final state to session_output.json with status=completed
+            try:
+                counts = report.event_counts
+                final_payload = {
+                    "sessionId":       db_session_id or risk_service.session_id,
+                    "riskScore":       round(report.final_score, 1),
+                    "riskLevel":       report.final_level.value,
+                    "totalViolations": report.total_events,
+                    "phoneDetections": counts.get("PHONE_DETECTED", 0),
+                    "multipleFaces":   counts.get("MULTIPLE_FACES", 0),
+                    "noFace":          counts.get("NO_FACE", 0),
+                    "lookingAway":     counts.get("LOOKING_AWAY", 0),
+                    "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                    "sessionSeconds":  round(report.duration_s, 1),
+                    "lastEvent":       "Session ended",
+                    "status":          "completed",
+                    "integrityPassed": report.integrity_passed,
+                    "reportPath":      os.path.join(
+                        config.LOG_DIR, "session_report.txt"
+                    ),
+                }
+                with open(output_file, "w", encoding="utf-8") as fh:
+                    json.dump(final_payload, fh)
+                print(f"[Main] Final output written → {output_file}")
+            except Exception as exc:
+                print(f"[Main] Warning: could not write final output: {exc}")
 
             print("\n" + report.to_plain_text())
             print(

@@ -11,6 +11,8 @@ import examRoutes from './routes/exams.js';
 import codeRoutes from './routes/code.js';
 import violationRoutes from './routes/violations.js';
 import submissionRoutes from './routes/submissions.js';
+import proctoringRoutes from './proctoring/proctoringRoutes.js';
+import { stopAllSessions } from './proctoring/proctoringService.js';
 import { setupSocketHandlers } from './sockets/index.js';
 
 dotenv.config();
@@ -36,8 +38,8 @@ app.use(cors({
   ],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Test database connection
 prisma.$connect()
@@ -55,6 +57,7 @@ app.use('/api/exams', examRoutes);
 app.use('/api/code', codeRoutes);
 app.use('/api/violations', violationRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/proctoring', proctoringRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -75,6 +78,13 @@ app.use((err, req, res, next) => {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
+  stopAllSessions();       // kill any running Python proctoring processes
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  stopAllSessions();
   await prisma.$disconnect();
   process.exit(0);
 });
