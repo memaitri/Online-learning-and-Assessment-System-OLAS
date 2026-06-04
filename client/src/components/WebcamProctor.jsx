@@ -13,8 +13,10 @@ import { proctoringAPI } from '../services/api';
  * onResult         : fn(result) – Called with each JSON result from Python.
  * disabled         : bool    – Stop capturing when exam is submitted.
  * proctoringReady  : bool    – Only start sending frames once Python is up.
+ * existingStream   : MediaStream | null – Pre-granted stream from ExamTake.
+ *                    If provided, getUserMedia is skipped entirely.
  */
-const WebcamProctor = ({ examId, onResult, disabled, proctoringReady }) => {
+const WebcamProctor = ({ examId, onResult, disabled, proctoringReady, existingStream }) => {
   const videoRef     = useRef(null);
   const canvasRef    = useRef(null);
   const streamRef    = useRef(null);
@@ -38,10 +40,13 @@ const WebcamProctor = ({ examId, onResult, disabled, proctoringReady }) => {
   const startWebcam = useCallback(async () => {
     console.log('[WebcamProctor] Requesting camera…');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Reuse the stream already granted by ExamTake to avoid a second
+      // permission prompt. Only call getUserMedia if no stream was passed in.
+      const stream = existingStream || await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
       });
+      console.log('[Camera] Frames uploading — stream attached to preview');
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -53,7 +58,7 @@ const WebcamProctor = ({ examId, onResult, disabled, proctoringReady }) => {
       console.error('[WebcamProctor] getUserMedia failed:', err.name, err.message);
       updateCamStatus(err.name === 'NotAllowedError' ? 'denied' : 'error');
     }
-  }, []);
+  }, [existingStream]);
 
   // ── Capture one frame and send it ────────────────────────────────────
   const captureAndSend = useCallback(async () => {
@@ -101,13 +106,16 @@ const WebcamProctor = ({ examId, onResult, disabled, proctoringReady }) => {
   useEffect(() => {
     startWebcam();
     return () => {
-      if (streamRef.current) {
+      // Only stop tracks we own — if ExamTake passed the stream, let it
+      // manage its own lifecycle. We stop tracks only when no existing stream
+      // was provided (i.e. we called getUserMedia ourselves).
+      if (!existingStream && streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         console.log('[WebcamProctor] Camera stopped.');
       }
       clearInterval(captureTimer.current);
     };
-  }, []);
+  }, [existingStream]);
 
   // ── Start/stop interval when readiness changes ────────────────────────
   // Depends on proctoringReady so we only start sending once Python is up.

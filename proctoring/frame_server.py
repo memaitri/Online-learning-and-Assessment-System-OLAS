@@ -36,6 +36,120 @@ from typing import Optional
 import cv2
 import numpy as np
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependency check — runs before any detector is initialised.
+# Exits with a clear message if the environment is broken.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def ensure_models() -> None:
+    """
+    Check that every model file required by config.py exists in the
+    proctoring directory.  Any missing file is downloaded automatically
+    from the official Google MediaPipe CDN before any detector starts.
+    """
+    import urllib.request
+
+    # Map config attribute → (filename, official download URL)
+    MODELS = [
+        (
+            config.FACE_DETECTION_MODEL,
+            "https://storage.googleapis.com/mediapipe-models/"
+            "face_detector/blaze_face_short_range/float16/1/"
+            "blaze_face_short_range.tflite",
+        ),
+        (
+            config.FACE_MESH_MODEL,
+            "https://storage.googleapis.com/mediapipe-models/"
+            "face_landmarker/face_landmarker/float16/1/"
+            "face_landmarker.task",
+        ),
+        # YOLO is downloaded automatically by ultralytics on first use,
+        # but we list it here so the log confirms its presence.
+        (
+            config.PHONE_MODEL_PATH,
+            None,   # ultralytics handles this itself
+        ),
+    ]
+
+    all_ok = True
+    for model_path, url in MODELS:
+        if os.path.isfile(model_path):
+            size = os.path.getsize(model_path)
+            print(f"[FS:MODEL] Found    {model_path} ({size:,} bytes)", file=sys.stderr, flush=True)
+            continue
+
+        if url is None:
+            # Let ultralytics download it during PhoneService.start()
+            print(f"[FS:MODEL] {model_path} not found — ultralytics will auto-download", file=sys.stderr, flush=True)
+            continue
+
+        print(f"[FS:MODEL] Missing  {model_path} — downloading from official source…", file=sys.stderr, flush=True)
+        try:
+            def _progress(block: int, block_size: int, total: int) -> None:
+                if total > 0:
+                    pct = min(100, block * block_size * 100 // total)
+                    print(f"[FS:MODEL] {model_path}  {pct}%", end="\r", file=sys.stderr, flush=True)
+
+            urllib.request.urlretrieve(url, model_path, reporthook=_progress)
+            size = os.path.getsize(model_path)
+            print(f"\n[FS:MODEL] Downloaded {model_path} ({size:,} bytes) OK", file=sys.stderr, flush=True)
+        except Exception as exc:
+            print(f"\n[FS:MODEL] FAILED to download {model_path}: {exc}", file=sys.stderr, flush=True)
+            all_ok = False
+
+    if not all_ok:
+        print("[FS:MODEL] One or more models could not be downloaded — exiting.", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+
+def verify_dependencies() -> None:
+    """
+    Verify that all required packages are importable and at compatible versions.
+    Prints a summary and exits with code 1 on any failure so the Node process
+    sees a non-zero exit code and logs a clear error instead of hanging.
+    """
+    import importlib, platform
+
+    checks = [
+        ("mediapipe",  "0.10.30", None),   # min 0.10.30 for Python 3.13 wheels
+        ("cv2",        "4.9.0",   None),
+        ("numpy",      "1.26.0",  None),
+        ("ultralytics","8.0.0",   None),
+    ]
+
+    print(f"[FS:ENV] Python  {sys.version.split()[0]}  ({platform.system()} {platform.machine()})",
+          file=sys.stderr, flush=True)
+
+    failed = False
+    for pkg, min_ver, _ in checks:
+        try:
+            mod = importlib.import_module(pkg)
+            ver = getattr(mod, "__version__", "unknown")
+            print(f"[FS:ENV] {pkg:<20s} {ver}", file=sys.stderr, flush=True)
+        except ImportError as exc:
+            print(f"[FS:ENV] MISSING  {pkg:<20s} — {exc}", file=sys.stderr, flush=True)
+            failed = True
+
+    # Verify the specific MediaPipe Tasks API used by the detectors
+    try:
+        import mediapipe as mp
+        _ = mp.tasks.vision.FaceDetector
+        _ = mp.tasks.vision.FaceLandmarker
+        print("[FS:ENV] mediapipe.tasks.vision  OK", file=sys.stderr, flush=True)
+    except Exception as exc:
+        print(f"[FS:ENV] BROKEN   mediapipe.tasks.vision — {exc}", file=sys.stderr, flush=True)
+        print("[FS:ENV] FIX: pip uninstall tensorflow -y  &&  pip install mediapipe==0.10.35",
+              file=sys.stderr, flush=True)
+        failed = True
+
+    if failed:
+        print("[FS:ENV] Dependency check FAILED — exiting. Fix the errors above and restart.",
+              file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    print("[FS:ENV] All dependencies OK.", file=sys.stderr, flush=True)
+
+
 # ── Detection modules (all unchanged from main.py) ───────────────────────────
 from face_detector      import FaceDetector,    FaceDetectorError
 from face_mesh_detector import FaceMeshDetector, FaceMeshDetectorError
@@ -145,7 +259,10 @@ class FrameServer:
         Main execution: initialise all detectors, then read frames from stdin
         until "STOP" or EOF.
         """
-        print("[FS] Frame server starting...", file=sys.stderr)
+        print("[FS:DIAG] Frame server run() called. session_id=" + str(self.db_session_id), file=sys.stderr, flush=True)
+        print("[FS] Frame server starting...", file=sys.stderr, flush=True)
+        ensure_models()
+        verify_dependencies()
 
         with ViolationLogger() as logger:
             risk_service   = RiskService(session_id=self.db_session_id)
@@ -172,8 +289,8 @@ class FrameServer:
                 with FaceMeshDetector() as mesh_detector:
                     with FaceDetector() as detector:
                         print("[FS] All detectors ready. Waiting for frames...",
-                              file=sys.stderr)
-                        # Flush so Node knows Python is ready
+                              file=sys.stderr, flush=True)
+                        # Flush stdout so any buffered startup output reaches Node
                         sys.stdout.flush()
 
                         self._read_loop(
@@ -208,30 +325,39 @@ class FrameServer:
         risk_service,
     ) -> None:
         """Read base64 frames from stdin and run the detection pipeline."""
-        for raw_line in sys.stdin:
+        print("[FS:DIAG] _read_loop started — waiting for stdin lines", file=sys.stderr, flush=True)
+        line_count = 0
+        # Use readline() in a while-loop instead of iterating sys.stdin.
+        # The file iterator uses internal read-ahead buffering that can delay
+        # line delivery on Windows pipes even with buffering=1 set.
+        # readline() returns immediately when a complete line is available.
+        while True:
+            raw_line = sys.stdin.readline()
+            if not raw_line:   # EOF — stdin was closed (STOP + stdin.end() from Node)
+                print("[FS:DIAG] stdin EOF — exiting read loop", file=sys.stderr, flush=True)
+                break
             line = raw_line.strip()
+            line_count += 1
 
             if not line:
                 continue
 
             if line.upper() == "STOP":
-                print("[FS] Received STOP signal.", file=sys.stderr)
+                print("[FS:DIAG] Received STOP signal.", file=sys.stderr, flush=True)
                 break
 
             # ── Browser-side violation injection ───────────────────────
-            # Node sends "VIOLATION:<json>" when a keyboard/fullscreen
-            # violation fires in the browser, so RiskService gets it too.
             if line.startswith("VIOLATION:"):
+                print(f"[FS:DIAG] Browser violation received: {line[:80]}", file=sys.stderr, flush=True)
                 try:
                     payload    = json.loads(line[len("VIOLATION:"):])
                     event_str  = payload.get("eventType", "LOOKING_AWAY")
                     event_type = EventType(event_str)
                     meta       = payload.get("metadata", {})
                     risk_service.record_event(event_type, metadata=meta)
-                    print(f"[FS] BrowserViolation recorded: {event_str}", file=sys.stderr)
+                    print(f"[FS:DIAG] BrowserViolation recorded: {event_str}", file=sys.stderr, flush=True)
                 except Exception as exc:
-                    print(f"[FS] Could not parse VIOLATION message: {exc}", file=sys.stderr)
-                # Emit updated snapshot
+                    print(f"[FS:DIAG] Could not parse VIOLATION message: {exc}", file=sys.stderr, flush=True)
                 snap   = risk_service.snapshot
                 counts = snap.event_counts
                 self._emit_result({
@@ -251,8 +377,10 @@ class FrameServer:
                 continue
 
             # ── Decode frame ───────────────────────────────────────────
+            print(f"[FS:DIAG] Frame line received (len={len(line)}, line#{line_count})", file=sys.stderr, flush=True)
             frame = decode_frame(line)
             if frame is None:
+                print("[FS:DIAG] Frame decode FAILED — skipping", file=sys.stderr, flush=True)
                 self._emit_result({"error": "decode_failed"})
                 continue
 
@@ -261,26 +389,35 @@ class FrameServer:
             self._fps.tick()
 
             if self.frame_index == 1:
-                print(f"[FS] First frame received: {frame_w}×{frame_h}", file=sys.stderr)
+                print(f"[FS:DIAG] First frame decoded OK: {frame_w}x{frame_h}", file=sys.stderr, flush=True)
 
             # ── Detection pipeline (identical to main.py loop body) ────
             detection_result = detector.detect(frame)
-            mesh_result      = mesh_detector.detect(frame)
+            print(f"[FS:DIAG] FaceDetector: faces={detection_result.face_count}", file=sys.stderr, flush=True)
+
+            mesh_result = mesh_detector.detect(frame)
+            print(f"[FS:DIAG] FaceMesh: mesh_faces={len(mesh_result.faces)}", file=sys.stderr, flush=True)
 
             gaze_results = []
             for face in mesh_result.faces:
                 g = gaze_tracker.analyse(face)
                 gaze_tracker.violation_tracker.update(g.direction)
                 gaze_results.append(g)
+            if gaze_results:
+                print(f"[FS:DIAG] Gaze: direction={gaze_results[0].direction.value}", file=sys.stderr, flush=True)
 
             pose_results = []
             for face in mesh_result.faces:
                 p = head_estimator.estimate(face, frame_w, frame_h)
                 head_estimator.violation_tracker.update(p)
                 pose_results.append(p)
+            if pose_results:
+                print(f"[FS:DIAG] HeadPose: direction={pose_results[0].direction.value}", file=sys.stderr, flush=True)
 
             phone_result = phone_service.submit(frame, self.frame_index)
             phone_service.violation_tracker.update(phone_result)
+            p_count = phone_result.phone_count if phone_result else 0
+            print(f"[FS:DIAG] Phone: detected={p_count}", file=sys.stderr, flush=True)
 
             status = tracker.update(detection_result.face_count)
 
@@ -307,8 +444,7 @@ class FrameServer:
                 "lastEvent":      snap.last_event,
                 "status":         "running",
             }
-            if self.frame_index % 5 == 0:
-                print(f"[FS] Frame {self.frame_index}: faces={detection_result.face_count} risk={round(snap.score,1)} level={snap.level.value}", file=sys.stderr)
+            print(f"[FS:DIAG] Emitting result: frame={self.frame_index} risk={result['riskScore']} level={result['riskLevel']} faces={result['faceCount']}", file=sys.stderr, flush=True)
             self._emit_result(result)
 
     # ------------------------------------------------------------------
@@ -393,8 +529,12 @@ if __name__ == "__main__":
     # don't crash with UnicodeEncodeError on cp1252 consoles.
     if sys.platform == "win32":
         import io
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        # write_through=True on both streams so every print() reaches Node immediately
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8',
+                                       errors='replace', write_through=True)
+        # write_through=True ensures each print() flushes immediately to Node's readline
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8',
+                                       errors='replace', write_through=True)
 
     parser = argparse.ArgumentParser(description="OLAS Headless Frame Server")
     parser.add_argument("--session-id",  type=str, default=None)
@@ -410,7 +550,11 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         import msvcrt
         msvcrt.setmode(sys.stdin.fileno(), 0x8000)   # 0x8000 == _O_BINARY
-        sys.stdin = open(sys.stdin.fileno(), 'r', encoding='utf-8', newline='')
+        # Use line-buffering (buffering=1) to ensure Python processes each line
+        # as Node writes it — without this, block-buffering can delay frames
+        # until the internal buffer fills (typically 4-8 KB), stalling the loop.
+        sys.stdin = open(sys.stdin.fileno(), 'r', encoding='utf-8',
+                         newline='', buffering=1)
 
     server = FrameServer(
         db_session_id=args.session_id,

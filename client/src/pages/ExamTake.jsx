@@ -44,6 +44,12 @@ const ExamTake = () => {
   const [showFinalReport, setShowFinalReport] = useState(false);
   const [finalReport, setFinalReport]     = useState(null);
 
+  // ── Camera permission state ──────────────────────────────────────────
+  // 'idle' | 'requesting' | 'granted' | 'denied' | 'error'
+  const [camPermission, setCamPermission] = useState('idle');
+  const [camStream, setCamStream]         = useState(null); // state so WebcamProctor prop updates
+  const camStreamRef = useRef(null); // ref copy for cleanup access
+
   // ── Handle real-time result from WebcamProctor ───────────────────────
   const handleFrameResult = useCallback((result) => {
     if (!result) return;
@@ -72,9 +78,49 @@ const ExamTake = () => {
   const proctoringSessionId = useRef(null);       // DB session ID used for proctoring
 
   // ─────────────────────────────────────────────────────────────────────
-  // Enter fullscreen
+  // Step 1-4: Request camera → verify stream → enter fullscreen
+  // Called by the "Enter Fullscreen & Start Exam" button.
+  // Exam start (steps 5-6) is handled by the existing useEffect that
+  // watches session + fullscreenReady — nothing there is changed.
   // ─────────────────────────────────────────────────────────────────────
-  const enterFullscreen = async () => {
+  const handleStartButton = async () => {
+    // ── Step 1: Request camera permission ──────────────────────────────
+    console.log('[Camera] Permission requested');
+    setCamPermission('requesting');
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        audio: false,
+      });
+    } catch (err) {
+      const denied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+      console.error('[Camera] Permission denied:', err.name, err.message);
+      setCamPermission(denied ? 'denied' : 'error');
+      return; // block exam start
+    }
+
+    // ── Step 2: Verify stream has an active video track ─────────────────
+    const tracks = stream.getVideoTracks();
+    if (!tracks.length || tracks[0].readyState !== 'live') {
+      console.error('[Camera] Stream has no live video track');
+      stream.getTracks().forEach(t => t.stop());
+      setCamPermission('error');
+      return;
+    }
+    console.log('[Camera] Permission granted');
+    console.log('[Camera] Stream active —', tracks[0].label);
+    setCamPermission('granted');
+
+    // ── Step 3: Store stream so WebcamProctor can reuse it ─────────────
+    // Stored in both state (triggers re-render so the prop is current)
+    // and ref (for cleanup access without a stale closure).
+    camStreamRef.current = stream;
+    setCamStream(stream);
+
+    // ── Step 4: Enter fullscreen ────────────────────────────────────────
+    // Steps 5 (start proctoring) and 6 (begin frame uploads) are triggered
+    // automatically by the existing useEffect on session + fullscreenReady.
     try {
       const el = document.documentElement;
       if (el.requestFullscreen)            await el.requestFullscreen();
@@ -83,6 +129,11 @@ const ExamTake = () => {
       setFullscreenReady(true);
     } catch {
       toast.error('Fullscreen required. Please try again.');
+      // Release the stream if fullscreen fails so user can retry cleanly
+      stream.getTracks().forEach(t => t.stop());
+      camStreamRef.current = null;
+      setCamStream(null);
+      setCamPermission('idle');
     }
   };
 
@@ -137,11 +188,21 @@ const ExamTake = () => {
     pollInterval.current = setInterval(async () => {
       try {
         const res = await proctoringAPI.status(examId);
-        if (res.data?.proctoring?.liveData) {
-          setRiskData(res.data.proctoring.liveData);
+        const proctoring = res.data?.proctoring;
+        console.log('[ExamTake:POLL] Status:', JSON.stringify({
+          status: proctoring?.status,
+          ready: proctoring?.ready,
+          hasLiveData: !!proctoring?.liveData,
+          riskScore: proctoring?.liveData?.riskScore,
+          riskLevel: proctoring?.liveData?.riskLevel,
+          faceCount: proctoring?.liveData?.faceCount,
+          totalViolations: proctoring?.liveData?.totalViolations,
+        }));
+        if (proctoring?.liveData) {
+          setRiskData(proctoring.liveData);
         }
-      } catch {
-        // Silently ignore poll failures — network blip shouldn't disrupt exam
+      } catch (e) {
+        console.warn('[ExamTake:POLL] Status poll error:', e.message);
       }
     }, 5000);
   }, []);
@@ -237,7 +298,7 @@ const ExamTake = () => {
     try {
       const [examRes, sessionRes] = await Promise.all([
         examAPI.getById(id),
-        examAPI.getSession(id),
+        examAPI.start(id),   // creates session if missing, returns existing if present
       ]);
       setExam(examRes.data);
       setSession(sessionRes.data);
@@ -402,26 +463,89 @@ const ExamTake = () => {
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // Fullscreen gate
+  // Fullscreen gate — camera permission + startup sequence
   // ─────────────────────────────────────────────────────────────────────
   if (!fullscreenReady) {
+    // ── Camera denied modal ────────────────────────────────────────────
+    if (camPermission === 'denied') {
+      return (
+        <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+          <div className="text-center max-w-md px-6">
+            <div className="text-6xl mb-6">📷</div>
+            <h1 className="text-2xl font-bold mb-3 text-red-400">Camera Access Required</h1>
+            <p className="text-gray-300 mb-2">
+              Camera permission was denied. This examination requires webcam access for AI proctoring.
+            </p>
+            <p className="text-gray-400 text-sm mb-8">
+              To fix this: click the camera icon in your browser's address bar and allow access, then retry.
+            </p>
+            <button
+              onClick={() => setCamPermission('idle')}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Camera error modal ─────────────────────────────────────────────
+    if (camPermission === 'error') {
+      return (
+        <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+          <div className="text-center max-w-md px-6">
+            <div className="text-6xl mb-6">⚠️</div>
+            <h1 className="text-2xl font-bold mb-3 text-yellow-400">Camera Unavailable</h1>
+            <p className="text-gray-300 mb-2">
+              Could not access your webcam. Make sure no other application is using it and try again.
+            </p>
+            <button
+              onClick={() => setCamPermission('idle')}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg mt-6"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Main gate ──────────────────────────────────────────────────────
+    const isRequesting = camPermission === 'requesting';
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
         <div className="text-center max-w-md px-6">
           <div className="text-6xl mb-6">🖥️</div>
           <h1 className="text-3xl font-bold mb-4">{exam ? exam.title : 'Exam'}</h1>
-          <p className="text-gray-300 mb-2">This exam requires fullscreen mode.</p>
+          <p className="text-gray-300 mb-2">This exam requires fullscreen mode and webcam access.</p>
           <p className="text-gray-400 text-sm mb-2">
             AI proctoring monitors your webcam for face presence, phone usage, and gaze direction.
           </p>
           <p className="text-gray-400 text-sm mb-8">
             All actions are recorded. Violations affect your integrity score.
           </p>
+
+          {/* Camera status indicator */}
+          <div className="flex items-center justify-center space-x-2 mb-6">
+            <div className={`w-2.5 h-2.5 rounded-full ${
+              camPermission === 'idle'       ? 'bg-gray-500' :
+              camPermission === 'requesting' ? 'bg-yellow-400 animate-pulse' :
+              camPermission === 'granted'    ? 'bg-green-400' : 'bg-red-500'
+            }`} />
+            <span className="text-sm text-gray-400">
+              {camPermission === 'idle'       && 'Camera Required'}
+              {camPermission === 'requesting' && 'Camera Connecting…'}
+              {camPermission === 'granted'    && 'Camera Active'}
+            </span>
+          </div>
+
           <button
-            onClick={enterFullscreen}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
+            onClick={handleStartButton}
+            disabled={isRequesting}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
           >
-            Enter Fullscreen &amp; Start Exam
+            {isRequesting ? 'Requesting Camera…' : 'Enter Fullscreen & Start Exam'}
           </button>
           {!exam && <p className="text-gray-500 text-sm mt-4">Loading exam details…</p>}
         </div>
@@ -533,6 +657,7 @@ const ExamTake = () => {
         onResult={handleFrameResult}
         disabled={isSubmitting}
         proctoringReady={proctoringReady}
+        existingStream={camStream}
       />
 
       {/* Header */}

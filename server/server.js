@@ -1,3 +1,4 @@
+import 'dotenv/config';   // must be first — loads .env before any Prisma imports
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';

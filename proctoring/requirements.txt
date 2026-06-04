@@ -1,4 +1,24 @@
-opencv-python>=4.9.0
+# OLAS Proctoring — pinned dependencies
+# Tested on: Python 3.13, Windows 11 (Anaconda)
+#
+# IMPORTANT — TensorFlow must NOT be installed.
+# mediapipe 0.10.x imports tensorflow.tools.docs.doc_controls at startup.
+# TensorFlow 2.16+ removed tensorflow.python.platform.self_check, which
+# crashes the import. mediapipe 0.10.35 ships a fixed optional_dependencies
+# that skips TF gracefully when it is absent.
+#
+# Install:
+#   pip install -r requirements.txt
+#
+# If tensorflow is already installed, remove it first:
+#   pip uninstall tensorflow tensorflow-intel tensorflow-cpu -y
+
+# Core detection
+mediapipe==0.10.35
+opencv-python>=4.9.0,<5.0.0
+
+# Phone detection (YOLO)
+ultralytics==8.4.60
+
+# Numerical
 numpy>=1.26.0
-mediapipe>=0.10.0
-ultralytics>=8.0.0

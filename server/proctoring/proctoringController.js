@@ -95,14 +95,14 @@ export const submitFrameHandler = async (req, res) => {
     }
 
     const frameSize = Math.round(frame.length / 1024);
-    console.log(`[Frame] session=${dbSession.id.slice(0,8)} size=${frameSize}KB`);
+    console.log(`[Frame:CTRL] Received frame: session=${dbSession.id.slice(0,8)} size=${frameSize}KB examId=${examId}`);
 
     const result = submitFrame(dbSession.id, frame);
 
     if (!result.success) {
-      console.warn(`[Frame] submitFrame failed: ${result.message}`);
+      console.warn(`[Frame:CTRL] submitFrame FAILED: ${result.message} session=${dbSession.id.slice(0,8)}`);
     } else {
-      console.log(`[Frame] Sent to Python. latestResult=${!!result.latestResult}`);
+      console.log(`[Frame:CTRL] submitFrame OK. hasResult=${!!result.latestResult}`);
     }
 
     res.json({
@@ -140,11 +140,14 @@ export const startProctoring = async (req, res) => {
     }
 
     // Spawn the Python proctoring process, passing the DB session ID
+    console.log(`[Proctoring:CTRL] Starting Python session for dbSession=${dbSession.id.slice(0,8)} exam=${examId}`);
     const result = startSession(dbSession.id);
 
     if (!result.success) {
       return res.status(409).json({ message: result.message });
     }
+
+    console.log(`[Proctoring:CTRL] Python process spawned: pid=${result.pid} session=${result.sessionId?.slice(0,8)}`);
 
     res.status(201).json({
       message:       'Proctoring started',

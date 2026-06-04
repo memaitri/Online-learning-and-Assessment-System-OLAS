@@ -55,6 +55,12 @@ export function startSession(dbSessionId) {
     }
   );
 
+  if (!pyProcess.pid) {
+    console.error(`[Proctoring] spawn returned no PID — 'python' may not be in PATH`);
+    return { success: false, message: 'Failed to spawn Python process (no PID)' };
+  }
+  console.log(`[Proctoring:DIAG] Spawned python PID=${pyProcess.pid} cwd=${PROCTORING_DIR}`);
+
   const session = {
     process:      pyProcess,
     pid:          pyProcess.pid,
@@ -69,12 +75,12 @@ export function startSession(dbSessionId) {
   // ── Read Python stdout line-by-line (each line is a JSON result) ─────
   const rl = readline.createInterface({ input: pyProcess.stdout });
   rl.on('line', (line) => {
+    process.stdout.write(`[Proctoring:STDOUT:${dbSessionId.slice(0,6)}] ${line.slice(0,120)}\n`);
     try {
       const result = JSON.parse(line);
       session.latestResult = result;
-      // Log every 10th frame to avoid flooding the console
-      if (result.frameIndex && result.frameIndex % 10 === 0) {
-        process.stdout.write(`[Proctoring:${dbSessionId.slice(0,6)}] frame=${result.frameIndex} risk=${result.riskScore} level=${result.riskLevel}\n`);
+      if (result.frameIndex) {
+        process.stdout.write(`[Proctoring:RESULT:${dbSessionId.slice(0,6)}] frame=${result.frameIndex} risk=${result.riskScore} level=${result.riskLevel} faces=${result.faceCount}\n`);
       }
     } catch (_) {
       // Non-JSON stdout line — ignore (e.g. mediapipe init messages)
@@ -84,10 +90,11 @@ export function startSession(dbSessionId) {
   // ── Log Python stderr to Node console ────────────────────────────────
   pyProcess.stderr.on('data', (data) => {
     const msg = data.toString();
-    process.stderr.write(`[Proctoring:${dbSessionId.slice(0,6)}] ${msg}`);
+    process.stderr.write(`[Proctoring:STDERR:${dbSessionId.slice(0,6)}] ${msg}`);
     // Mark as ready once detectors are initialised
     if (msg.includes('All detectors ready')) {
       session.ready = true;
+      process.stdout.write(`[Proctoring] Session ${dbSessionId.slice(0,6)} READY — frames will now be processed\n`);
     }
   });
 
@@ -147,16 +154,27 @@ export function submitViolationEvent(dbSessionId, eventType, metadata = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function submitFrame(dbSessionId, base64Jpeg) {
   const session = activeSessions.get(dbSessionId);
-  if (!session || session.status !== 'running') {
+  if (!session) {
+    console.warn(`[Frame:DIAG] No session found for dbSessionId=${dbSessionId.slice(0,8)}`);
+    return { success: false, message: 'No active proctoring session' };
+  }
+  if (session.status !== 'running') {
+    console.warn(`[Frame:DIAG] Session status=${session.status} (not running) for ${dbSessionId.slice(0,8)}`);
     return { success: false, message: 'No active proctoring session' };
   }
   try {
     if (!session.process.stdin.writable) {
+      console.warn(`[Frame:DIAG] Python stdin not writable for ${dbSessionId.slice(0,8)}`);
       return { success: false, message: 'Python stdin not writable' };
     }
-    session.process.stdin.write(base64Jpeg.replace(/\n/g, '') + '\n');
+    const stripped = base64Jpeg.replace(/\n/g, '').replace(/\r/g, '');
+    const frameLen = stripped.length;
+    console.log(`[Frame:DIAG] Writing frame to Python stdin: len=${frameLen} session=${dbSessionId.slice(0,8)} ready=${session.ready}`);
+    session.process.stdin.write(stripped + '\n');
+    console.log(`[Frame:DIAG] Frame written to stdin OK. latestResult=${!!session.latestResult}`);
     return { success: true, latestResult: session.latestResult };
   } catch (err) {
+    console.error(`[Frame:DIAG] stdin.write error: ${err.message}`);
     // Absorb EPIPE — Python process exited between writable check and write
     return { success: false, message: err.message };
   }

@@ -18,6 +18,7 @@ env/
 # ── Logs and generated reports ────────────────────────────────────────
 logs/
 *.log
+session_output.json
 
 # ── OS / editor artefacts ─────────────────────────────────────────────
 .DS_Store
