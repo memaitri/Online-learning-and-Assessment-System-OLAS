@@ -13,7 +13,8 @@ const ExamMonitor = () => {
   const [submissions, setSubmissions] = useState([]);
   const [activeStudents, setActiveStudents] = useState(new Set());
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [studentCode, setStudentCode] = useState({});
+  const [viewingSubmission, setViewingSubmission] = useState(null); // full code viewer
+  const [grades, setGrades] = useState({}); // { submissionId: { score, feedback } }
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -53,10 +54,8 @@ const ExamMonitor = () => {
       });
 
       socketRef.current.on('student-code-update', ({ studentId, questionId, code, language }) => {
-        setStudentCode(prev => ({
-          ...prev,
-          [studentId]: { questionId, code, language, timestamp: new Date() }
-        }));
+        // live code update — reload submissions to get latest
+        loadData();
       });
     }
 
@@ -135,6 +134,19 @@ const ExamMonitor = () => {
 
   const getStudentSubmissions = (studentId) => {
     return submissions.filter(s => s.student?.id === studentId);
+  };
+
+  // ── Grade a submission ────────────────────────────────────────────────
+  const handleGrade = async (submissionId) => {
+    const g = grades[submissionId];
+    if (!g?.score && g?.score !== 0) return toast.error('Enter a score first');
+    try {
+      await submissionAPI.grade(submissionId, Number(g.score), g.feedback || '');
+      toast.success('Grade saved');
+      loadData();
+    } catch (err) {
+      toast.error('Failed to save grade: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   const getViolationColor = (severity) => {
@@ -296,7 +308,20 @@ const ExamMonitor = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {studentSubmissions.length} / {exam.questions?.length || 0}
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-semibold ${
+                            studentSubmissions.length === (exam.questions?.length || 0)
+                              ? 'text-green-600' : 'text-gray-700'
+                          }`}>
+                            {studentSubmissions.length} / {exam.questions?.length || 0}
+                          </span>
+                          {studentSubmissions.length > 0 && (
+                            <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                              <div className="bg-green-500 h-1.5 rounded-full"
+                                style={{ width: `${(studentSubmissions.length / (exam.questions?.length || 1)) * 100}%` }} />
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
@@ -376,104 +401,174 @@ const ExamMonitor = () => {
 
         {/* Student Detail Modal */}
         {selectedStudent && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
-            <div className="bg-white rounded-lg p-8 max-w-4xl w-full m-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
-                  <p className="text-gray-600">{selectedStudent.email}</p>
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-50 overflow-y-auto py-6">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-4">
+
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-gray-800 to-gray-700 rounded-t-2xl">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${activeStudents.has(selectedStudent.id) ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+                  <div>
+                    <h2 className="text-white text-xl font-bold">{selectedStudent.name}</h2>
+                    <p className="text-gray-300 text-sm">{selectedStudent.email}</p>
+                  </div>
+                  {(() => {
+                    const s = sessions.find(s => s.student.id === selectedStudent.id);
+                    const statusColors = { completed:'bg-blue-100 text-blue-800', blocked:'bg-red-100 text-red-800', in_progress:'bg-green-100 text-green-800' };
+                    const sc = s?.status || 'not_started';
+                    return <span className={`ml-2 text-xs px-2 py-1 rounded-full font-semibold ${statusColors[sc] || 'bg-gray-100 text-gray-700'}`}>{sc.replace('_',' ')}</span>;
+                  })()}
+                  {/* AI risk badge if available */}
+                  {(() => {
+                    const s = sessions.find(s => s.student.id === selectedStudent.id);
+                    if (!s?.riskLevel) return null;
+                    const rc = { SAFE:'bg-green-100 text-green-800', LOW:'bg-teal-100 text-teal-800', MEDIUM:'bg-yellow-100 text-yellow-800', HIGH:'bg-orange-100 text-orange-800', CRITICAL:'bg-red-100 text-red-800' };
+                    return <span className={`text-xs px-2 py-1 rounded-full font-semibold ${rc[s.riskLevel] || 'bg-gray-100'}`}>🤖 {s.riskLevel} ({s.riskScore?.toFixed(0) ?? 0}/100)</span>;
+                  })()}
                 </div>
-                <button
-                  onClick={() => setSelectedStudent(null)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setSelectedStudent(null)} className="text-gray-300 hover:text-white text-2xl font-bold">×</button>
               </div>
 
-              {/* Student Violations */}
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-lg font-bold">Violations ({violationsByStudent[selectedStudent.id]?.length || 0})</h3>
-                  {violationsByStudent[selectedStudent.id]?.length > 0 && (
-                    <button
-                      onClick={() => {
-                        const studentSession = sessions.find(s => s.student.id === selectedStudent.id);
-                        if (studentSession) {
-                          handleResetViolations(studentSession.id);
-                        }
-                      }}
-                      className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm"
-                    >
-                      Reset Violations
-                    </button>
+              <div className="p-6 space-y-6">
+
+                {/* ── Violations ── */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold text-gray-800">
+                      Violations ({violationsByStudent[selectedStudent.id]?.length || 0})
+                    </h3>
+                    <div className="flex gap-2">
+                      {violationsByStudent[selectedStudent.id]?.length > 0 && (
+                        <button
+                          onClick={() => { const s = sessions.find(s => s.student.id === selectedStudent.id); if (s) handleResetViolations(s.id); }}
+                          className="px-3 py-1 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm font-medium"
+                        >Reset Violations</button>
+                      )}
+                      {(() => {
+                        const s = sessions.find(s => s.student.id === selectedStudent.id);
+                        if (s?.status === 'blocked') return (
+                          <button onClick={() => handleUnblockStudent(s.id)}
+                            className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium">
+                            🔓 Unblock Student
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {violationsByStudent[selectedStudent.id]?.length > 0 ? (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {violationsByStudent[selectedStudent.id].map(v => (
+                        <div key={v.id} className={`border-l-4 pl-3 py-1.5 rounded-r ${getViolationColor(v.severity)}`}>
+                          <div className="flex justify-between text-sm">
+                            <span className="font-semibold">{v.type}</span>
+                            <span className="text-xs text-gray-500">{new Date(v.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">{v.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm bg-green-50 px-4 py-3 rounded-lg">✓ No violations recorded</p>
                   )}
                 </div>
-                {violationsByStudent[selectedStudent.id]?.length > 0 ? (
-                  <div className="space-y-2">
-                    {violationsByStudent[selectedStudent.id].map((v) => (
-                      <div key={v.id} className={`border-l-4 pl-3 py-2 ${getViolationColor(v.severity)}`}>
-                        <div className="flex justify-between">
-                          <span className="font-medium">{v.type}</span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(v.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">{v.description}</p>
-                      </div>
-                    ))}
+
+                {/* ── Submissions ── */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-bold text-gray-800">
+                      Code Submissions ({submissionsByStudent[selectedStudent.id]?.length || 0} / {exam.questions?.length || 0} questions)
+                    </h3>
+                    <button onClick={loadData} className="text-xs text-blue-600 hover:text-blue-800">↻ Refresh</button>
                   </div>
-                ) : (
-                  <p className="text-gray-500">No violations</p>
-                )}
-              </div>
 
-              {/* Unblock Student Button */}
-              {(() => {
-                const studentSession = sessions.find(s => s.student.id === selectedStudent.id);
-                if (studentSession?.status === 'blocked') {
-                  return (
-                    <div className="mb-6">
-                      <button
-                        onClick={() => handleUnblockStudent(studentSession.id)}
-                        className="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 font-semibold"
-                      >
-                        Unblock Student & Allow Retake
-                      </button>
-                      <p className="text-sm text-gray-600 mt-2">
-                        This will unblock the student and allow them to continue the exam.
-                      </p>
-                    </div>
-                  );
-                }
-              })()}
+                  {submissionsByStudent[selectedStudent.id]?.length > 0 ? (
+                    <div className="space-y-3">
+                      {submissionsByStudent[selectedStudent.id]
+                        .sort((a, b) => a.question - b.question)
+                        .map(s => (
+                          <div key={s.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                            {/* Submission header */}
+                            <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
+                              <div className="flex items-center gap-3">
+                                <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">Q{s.question}</span>
+                                <span className="text-xs font-semibold text-gray-600 bg-gray-200 px-2 py-0.5 rounded uppercase">{s.language}</span>
+                                <span className="text-xs text-gray-500">
+                                  📅 {new Date(s.submittedAt).toLocaleString()}
+                                </span>
+                                {s.score != null && (
+                                  <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                                    Score: {s.score}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setViewingSubmission(viewingSubmission?.id === s.id ? null : s)}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                              >
+                                {viewingSubmission?.id === s.id ? '▲ Hide Code' : '▼ View Code'}
+                              </button>
+                            </div>
 
-              {/* Student Submissions */}
-              <div>
-                <h3 className="text-lg font-bold mb-2">Submissions ({submissionsByStudent[selectedStudent.id]?.length || 0})</h3>
-                {submissionsByStudent[selectedStudent.id]?.length > 0 ? (
-                  <div className="space-y-3">
-                    {submissionsByStudent[selectedStudent.id].map((s) => (
-                      <div key={s.id} className="border rounded p-3 bg-gray-50">
-                        <div className="flex justify-between mb-2">
-                          <span className="font-medium">Question {s.question}</span>
-                          <span className="text-sm text-gray-500">{s.language}</span>
-                        </div>
-                        <pre className="bg-gray-800 text-white p-3 rounded text-sm overflow-x-auto">
-                          {s.code}
-                        </pre>
-                        {s.output && (
-                          <div className="mt-2">
-                            <span className="text-sm font-medium">Output:</span>
-                            <pre className="bg-gray-100 p-2 rounded text-sm mt-1">{s.output}</pre>
+                            {/* Code viewer */}
+                            {viewingSubmission?.id === s.id && (
+                              <div>
+                                <pre className="bg-gray-900 text-green-300 p-4 text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto leading-relaxed">
+                                  {s.code}
+                                </pre>
+
+                                {/* Output if any */}
+                                {s.output && (
+                                  <div className="border-t border-gray-700 bg-gray-800 px-4 py-2">
+                                    <p className="text-xs font-semibold text-gray-400 mb-1">Last Output:</p>
+                                    <pre className="text-xs text-gray-300 font-mono">{s.output}</pre>
+                                  </div>
+                                )}
+
+                                {/* Feedback/grade row */}
+                                <div className="border-t bg-gray-50 px-4 py-3">
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">Grade this submission</p>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder="Score"
+                                      value={grades[s.id]?.score ?? (s.score ?? '')}
+                                      onChange={e => setGrades(prev => ({ ...prev, [s.id]: { ...prev[s.id], score: e.target.value } }))}
+                                      className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Feedback (optional)"
+                                      value={grades[s.id]?.feedback ?? (s.feedback || '')}
+                                      onChange={e => setGrades(prev => ({ ...prev, [s.id]: { ...prev[s.id], feedback: e.target.value } }))}
+                                      className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                                    />
+                                    <button
+                                      onClick={() => handleGrade(s.id)}
+                                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-semibold"
+                                    >
+                                      {s.score != null ? 'Update' : 'Save Grade'}
+                                    </button>
+                                  </div>
+                                  {s.gradedAt && (
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      Graded on {new Date(s.gradedAt).toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500">No submissions yet</p>
-                )}
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm bg-gray-50 px-4 py-3 rounded-lg">
+                      No submissions yet — student hasn't clicked Submit Code
+                    </p>
+                  )}
+                </div>
+
               </div>
             </div>
           </div>

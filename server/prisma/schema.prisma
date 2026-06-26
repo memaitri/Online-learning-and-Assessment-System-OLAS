@@ -16,14 +16,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdClasses      Class[]              @relation("CreatedClasses")
-  facultyClasses      Class[]              @relation("FacultyClasses")
-  studentClasses      Class[]              @relation("StudentClasses")
-  createdExams        Exam[]               @relation("CreatedExams")
+  createdClasses      Class[]                    @relation("CreatedClasses")
+  facultyClasses      Class[]                    @relation("FacultyClasses")
+  studentClasses      Class[]                    @relation("StudentClasses")
+  createdExams        Exam[]                     @relation("CreatedExams")
   examSessions        StudentExamSession[]
   submissions         Submission[]
   violations          Violation[]
-  gradedSubmissions   Submission[]         @relation("GradedSubmissions")
+  gradedSubmissions   Submission[]               @relation("GradedSubmissions")
+  uploadedQuestions   QuestionBank[]             @relation("UploadedQuestions")
+  questionAssignments StudentQuestionAssignment[]
 }
 
 model Class {
@@ -57,15 +59,23 @@ model Exam {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // Random question assignment fields
+  randomAssignment      Boolean @default(false)
+  questionsPerStudent   Int     @default(1)
+  randomSeed            Int?
+  allowRepetition       Boolean @default(false)
+
   classId String
   class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
 
   createdById String
   createdBy   User   @relation("CreatedExams", fields: [createdById], references: [id], onDelete: Cascade)
 
-  sessions    StudentExamSession[]
-  submissions Submission[]
-  violations  Violation[]
+  sessions             StudentExamSession[]
+  submissions          Submission[]
+  violations           Violation[]
+  questionBank         QuestionBank[]
+  questionAssignments  StudentQuestionAssignment[]
 }
 
 model StudentExamSession {
@@ -76,11 +86,10 @@ model StudentExamSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // ── Module 7: AI Proctoring risk fields ──────────────────────────────
-  riskScore            Float?   // 0–100 cumulative risk score
-  riskLevel            String?  // SAFE | LOW | MEDIUM | HIGH | CRITICAL
-  totalViolations      Int?     // total AI-detected violation events
-  proctoringReportPath String?  // path to session_report.txt on disk
+  riskScore            Float?
+  riskLevel            String?
+  totalViolations      Int?
+  proctoringReportPath String?
 
   studentId String
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -131,4 +140,43 @@ model Violation {
 
   examId String
   exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+}
+
+// ── Question Bank ─────────────────────────────────────────────────────────────
+model QuestionBank {
+  id             String   @id @default(uuid())
+  questionNumber Int
+  questionText   String   @db.Text
+  title          String   @default("")
+  points         Int      @default(10)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  uploadedById String
+  uploadedBy   User   @relation("UploadedQuestions", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  assignments StudentQuestionAssignment[]
+
+  @@index([examId])
+}
+
+// ── Student Question Assignment ───────────────────────────────────────────────
+model StudentQuestionAssignment {
+  id         String   @id @default(uuid())
+  assignedAt DateTime @default(now())
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, examId, questionId])
+  @@index([studentId, examId])
 }

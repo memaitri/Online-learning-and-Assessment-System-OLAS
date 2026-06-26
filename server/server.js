@@ -13,6 +13,7 @@ import codeRoutes from './routes/code.js';
 import violationRoutes from './routes/violations.js';
 import submissionRoutes from './routes/submissions.js';
 import proctoringRoutes from './proctoring/proctoringRoutes.js';
+import questionBankRoutes from './routes/questionBank.js';
 import { stopAllSessions } from './proctoring/proctoringService.js';
 import { setupSocketHandlers } from './sockets/index.js';
 
@@ -51,14 +52,15 @@ prisma.$connect()
 app.set('io', io);
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/classes', classRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/code', codeRoutes);
-app.use('/api/violations', violationRoutes);
-app.use('/api/submissions', submissionRoutes);
-app.use('/api/proctoring', proctoringRoutes);
+app.use('/api/auth',          authRoutes);
+app.use('/api/users',         userRoutes);
+app.use('/api/classes',       classRoutes);
+app.use('/api/exams',         examRoutes);
+app.use('/api/code',          codeRoutes);
+app.use('/api/violations',    violationRoutes);
+app.use('/api/submissions',   submissionRoutes);
+app.use('/api/proctoring',    proctoringRoutes);
+app.use('/api/question-bank', questionBankRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -79,7 +81,7 @@ app.use((err, req, res, next) => {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  stopAllSessions();       // kill any running Python proctoring processes
+  stopAllSessions();
   await prisma.$disconnect();
   process.exit(0);
 });
@@ -99,4 +101,3 @@ httpServer.listen(PORT, () => {
 });
 
 export { io, prisma };
-

@@ -81,4 +81,29 @@ export const userAPI = {
   delete: (id) => api.delete(`/users/${id}`)
 };
 
+export const questionBankAPI = {
+  // Upload a .txt/.doc/.docx and get back parsed questions (preview only)
+  upload: (formData) =>
+    api.post('/question-bank/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  // Save the (possibly edited) question list to DB
+  save: (examId, questions) =>
+    api.post('/question-bank/save', { examId, questions }),
+  // Get stored question bank for an exam
+  getBank: (examId) => api.get(`/question-bank/${examId}`),
+  // Edit one question
+  updateQuestion: (id, data) => api.put(`/question-bank/question/${id}`, data),
+  // Delete one question
+  deleteQuestion: (id) => api.delete(`/question-bank/question/${id}`),
+  // Assign questions randomly to all enrolled students
+  assign: (examId, opts) => api.post(`/question-bank/${examId}/assign`, opts),
+  // Get all assignments (faculty view)
+  getAssignments: (examId) => api.get(`/question-bank/${examId}/assignments`),
+  // Clear all assignments
+  clearAssignments: (examId) => api.delete(`/question-bank/${examId}/assignments`),
+  // Student: get my assigned question(s)
+  getMyQuestion: (examId) => api.get(`/question-bank/${examId}/my-question`),
+};
+
 export default api;

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import { examAPI, codeAPI, submissionAPI, proctoringAPI } from '../services/api';
+import { examAPI, codeAPI, submissionAPI, proctoringAPI, questionBankAPI } from '../services/api';
 import { initSocket, disconnectSocket } from '../services/socket';
 import ProctoringSystem from '../components/ProctoringSystem';
 import WebcamProctor from '../components/WebcamProctor';
@@ -39,10 +39,23 @@ const ExamTake = () => {
 
   // ── AI Proctoring state (Module 7 integration) ───────────────────────
   const [proctoringStarted, setProctoringStarted] = useState(false);
-  const [proctoringReady,   setProctoringReady]   = useState(false); // Python detectors loaded
+  const [proctoringReady,   setProctoringReady]   = useState(false);
   const [riskData, setRiskData]           = useState(null);
   const [showFinalReport, setShowFinalReport] = useState(false);
   const [finalReport, setFinalReport]     = useState(null);
+
+  // ── Random question assignment ───────────────────────────────────────
+  const [assignedQuestions, setAssignedQuestions] = useState(null);
+
+  // ── Test results state ───────────────────────────────────────────────
+  const [testResults,    setTestResults]    = useState(null);
+  const [testRunning,    setTestRunning]    = useState(false);
+  const [outputTab,      setOutputTab]      = useState('output'); // 'output' | 'tests'
+
+  // ── Per-question submission tracking ────────────────────────────────
+  // submittedQuestions: Set of questionNumber values already submitted
+  const [submittedQuestions, setSubmittedQuestions] = useState(new Set());
+  const [showExitModal,      setShowExitModal]      = useState(false);
 
   // ── Camera permission state ──────────────────────────────────────────
   // 'idle' | 'requesting' | 'granted' | 'denied' | 'error'
@@ -298,7 +311,7 @@ const ExamTake = () => {
     try {
       const [examRes, sessionRes] = await Promise.all([
         examAPI.getById(id),
-        examAPI.start(id),   // creates session if missing, returns existing if present
+        examAPI.start(id),
       ]);
       setExam(examRes.data);
       setSession(sessionRes.data);
@@ -316,6 +329,27 @@ const ExamTake = () => {
       }
       if (examRes.data.allowedLanguages?.length > 0) {
         setLanguage(examRes.data.allowedLanguages[0]);
+      }
+
+      // ── Fetch assigned questions (random assignment) ─────────────────
+      try {
+        const aqRes = await questionBankAPI.getMyQuestion(id);
+        if (aqRes.data.assigned && aqRes.data.questions.length > 0) {
+          // Map QuestionBank rows to the same shape as exam.questions
+          const mapped = aqRes.data.questions.map((q, idx) => ({
+            questionNumber: q.questionNumber,
+            title: q.title || `Question ${q.questionNumber}`,
+            description: q.questionText,
+            points: q.points ?? 10,
+            testCases: [],
+            _bankId: q.id,
+          }));
+          setAssignedQuestions(mapped);
+        } else {
+          setAssignedQuestions([]); // no random assignment — use exam.questions
+        }
+      } catch {
+        setAssignedQuestions([]); // fallback
       }
     } catch {
       toast.error('Failed to load exam');
@@ -355,6 +389,7 @@ const ExamTake = () => {
   const handleExecuteCode = async () => {
     setExecuting(true);
     setOutput('Executing...');
+    setOutputTab('output');
     try {
       const res = await codeAPI.execute(code, language, input);
       setOutput(res.data.output || res.data.error || 'No output');
@@ -373,18 +408,114 @@ const ExamTake = () => {
   };
 
   // ─────────────────────────────────────────────────────────────────────
-  // Save submission
+  // Submit Test — run code against each test case
+  // ─────────────────────────────────────────────────────────────────────
+  const handleTestCode = async () => {
+    const testCases = question?.testCases ?? [];
+    if (!code.trim()) return toast.error('Write some code first');
+
+    // If no test cases defined, run once with empty input and show output
+    if (testCases.length === 0) {
+      toast('No test cases defined for this question — running with empty input');
+      await handleExecuteCode();
+      return;
+    }
+
+    setTestRunning(true);
+    setOutputTab('tests');
+    setTestResults(null);
+
+    const results = [];
+    for (const tc of testCases) {
+      try {
+        const res = await codeAPI.execute(code, language, tc.input ?? '');
+        const actual   = (res.data.output || res.data.error || '').trim();
+        const expected = (tc.expectedOutput ?? '').trim();
+        const passed   = actual === expected;
+        results.push({ input: tc.input, expected, actual, passed, error: res.data.error });
+      } catch (err) {
+        results.push({
+          input: tc.input, expected: tc.expectedOutput ?? '',
+          actual: 'Error: ' + (err.response?.data?.error || err.message),
+          passed: false, error: true,
+        });
+      }
+    }
+
+    setTestResults(results);
+    const passed = results.filter(r => r.passed).length;
+    const total  = results.length;
+    if (passed === total) toast.success(`All ${total} test cases passed! ✓`);
+    else toast.error(`${passed}/${total} test cases passed`);
+    setTestRunning(false);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Save submission (silent auto-save draft — not the final submit)
   // ─────────────────────────────────────────────────────────────────────
   const handleSaveSubmission = async () => {
     if (hasSubmitted.current) return;
     try {
       await submissionAPI.create({
         examId: id,
-        questionId: exam.questions[currentQuestion].questionNumber,
+        questionId: activeQuestions[currentQuestion]?.questionNumber ?? exam.questions[currentQuestion].questionNumber,
         code, language, output,
       });
       toast.success('Code saved successfully');
     } catch { toast.error('Failed to save code'); }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Submit Code — final submission for current question
+  // Shows in faculty dashboard submissions table
+  // ─────────────────────────────────────────────────────────────────────
+  const handleSubmitCode = async () => {
+    if (!code.trim()) { toast.error('Write some code before submitting'); return; }
+    if (hasSubmitted.current) return;
+
+    const qNum = activeQuestions[currentQuestion]?.questionNumber
+              ?? exam.questions[currentQuestion]?.questionNumber;
+
+    try {
+      await submissionAPI.create({
+        examId: id,
+        questionId: qNum,
+        code, language, output,
+      });
+
+      // Mark this question as submitted
+      setSubmittedQuestions(prev => new Set([...prev, qNum]));
+      toast.success(`Question ${qNum} submitted ✓`);
+
+      // Emit live update to faculty monitor
+      if (socketRef.current) {
+        socketRef.current.emit('code-update', {
+          examId: id, questionId: qNum, code, language,
+        });
+      }
+
+      // Check if ALL questions are now submitted → offer to exit
+      const allQNums = activeQuestions.map(q => q.questionNumber);
+      const newSubmitted = new Set([...submittedQuestions, qNum]);
+      const allDone = allQNums.every(n => newSubmitted.has(n));
+      if (allDone) {
+        setShowExitModal(true);
+      } else {
+        // Auto-advance to next unsubmitted question
+        const nextIdx = activeQuestions.findIndex(
+          (q, idx) => idx > currentQuestion && !newSubmitted.has(q.questionNumber)
+        );
+        if (nextIdx !== -1) {
+          setCurrentQuestion(nextIdx);
+          setCode('');
+          setOutput('');
+          setTestResults(null);
+          toast(`Move to Question ${activeQuestions[nextIdx].questionNumber}`, { icon: '→' });
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit code');
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────
@@ -553,7 +684,7 @@ const ExamTake = () => {
     );
   }
 
-  if (!exam || !session) {
+  if (!exam || !session || assignedQuestions === null) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
         <div className="text-center"><h1 className="text-2xl font-bold">Loading…</h1></div>
@@ -635,12 +766,19 @@ const ExamTake = () => {
   // ─────────────────────────────────────────────────────────────────────
   // Main exam UI
   // ─────────────────────────────────────────────────────────────────────
-  const question = exam.questions[currentQuestion];
+  // ─────────────────────────────────────────────────────────────────────
+  // Active question list: assigned questions take priority over exam.questions
+  // ─────────────────────────────────────────────────────────────────────
+  const activeQuestions = (assignedQuestions && assignedQuestions.length > 0)
+    ? assignedQuestions
+    : (exam?.questions ?? []);
+
+  const question = activeQuestions[currentQuestion];
 
   return (
     <div className="h-screen flex flex-col bg-gray-900">
 
-      {/* AI + Browser proctoring panel (top-right) */}
+      {/* Full AI proctoring panel — fixed bottom-LEFT, never covers buttons or webcam */}
       <ProctoringSystem
         sessionId={session.id}
         examId={id}
@@ -649,9 +787,10 @@ const ExamTake = () => {
         socket={socketRef.current}
         disabled={isSubmitting}
         riskData={riskData}
+        inline={false}
       />
 
-      {/* Webcam preview + frame capture (bottom-right) */}
+      {/* Webcam preview + frame capture (bottom-right, fixed) */}
       <WebcamProctor
         examId={id}
         onResult={handleFrameResult}
@@ -660,37 +799,40 @@ const ExamTake = () => {
         existingStream={camStream}
       />
 
-      {/* Header */}
-      <div className="bg-gray-800 text-white px-6 py-3 flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-bold">{exam.title}</h1>
-          <p className="text-sm text-gray-400">
-            Question {currentQuestion + 1} of {exam.questions.length}
+      {/* ── Header ── */}
+      <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3 flex-wrap shrink-0">
+        {/* Left: title + question count */}
+        <div className="min-w-0">
+          <h1 className="text-base font-bold truncate">{exam.title}</h1>
+          <p className="text-xs text-gray-400">
+            Q {currentQuestion + 1} / {activeQuestions.length}
           </p>
         </div>
-        <div className="flex items-center space-x-6">
-          {/* Live risk badge in header */}
-          {riskData && (
-            <div className="flex items-center space-x-2 bg-gray-700 px-3 py-1 rounded-lg">
-              <span className="text-xs text-gray-400">Risk</span>
-              <span className={`text-sm font-bold ${RISK_LEVEL_STYLES[riskData.riskLevel] || 'text-gray-300'}`}>
-                {(riskData.riskScore ?? 0).toFixed(0)}
-              </span>
-              <span className={`text-xs font-semibold ${RISK_LEVEL_STYLES[riskData.riskLevel] || 'text-gray-300'}`}>
-                {riskData.riskLevel}
-              </span>
-            </div>
-          )}
-          {autoSaving && <span className="text-sm text-yellow-400">Saving…</span>}
-          <span className={`text-lg font-mono ${timeLeft < 300 ? 'text-red-400 animate-pulse' : ''}`}>
-            {formatTime(timeLeft)}
+
+        {/* Centre: proctoring status inline — never overlaps buttons */}
+        <div className="flex items-center gap-2 flex-1">
+          <ProctoringSystem
+            sessionId={session.id}
+            examId={id}
+            onViolation={handleViolation}
+            onBlock={handleBlock}
+            socket={socketRef.current}
+            disabled={isSubmitting}
+            riskData={riskData}
+            inline={true}
+          />
+        </div>        {/* Right: timer + Submit Exam */}
+        <div className="flex items-center gap-3 ml-auto">
+          {autoSaving && <span className="text-xs text-yellow-400">Saving…</span>}
+          <span className={`text-base font-mono font-bold ${timeLeft < 300 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+            ⏱ {formatTime(timeLeft)}
           </span>
           <button
             onClick={handleSubmitExam}
             disabled={hasSubmitted.current}
-            className="bg-green-600 px-6 py-2 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors shadow-lg"
+            className="bg-green-600 px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
           >
-            Submit Exam
+            Finish Exam
           </button>
         </div>
       </div>
@@ -700,18 +842,29 @@ const ExamTake = () => {
         <div className="w-1/3 bg-gray-800 text-white p-6 overflow-y-auto">
           <div className="mb-6">
             <div className="flex space-x-2 mb-4 flex-wrap">
-              {exam.questions.map((q, idx) => (
+              {activeQuestions.map((q, idx) => (
                 <button
                   key={idx}
-                  onClick={() => { handleAutoSave(); setCurrentQuestion(idx); setCode(''); setOutput(''); }}
-                  className={`px-3 py-1 rounded mb-2 ${idx === currentQuestion ? 'bg-blue-600' : 'bg-gray-700'}`}
+                  onClick={() => { handleAutoSave(); setCurrentQuestion(idx); setCode(''); setOutput(''); setTestResults(null); }}
+                  className={`px-3 py-1 rounded mb-2 text-sm font-medium relative ${
+                    idx === currentQuestion
+                      ? 'bg-blue-600 text-white'
+                      : submittedQuestions.has(q.questionNumber)
+                        ? 'bg-green-700 text-green-100'
+                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                  }`}
                 >
-                  Q{idx + 1}
+                  Q{idx + 1}{submittedQuestions.has(q.questionNumber) ? ' ✓' : ''}
                 </button>
               ))}
             </div>
           </div>
           <h2 className="text-2xl font-bold mb-2">Question {question.questionNumber}</h2>
+          {assignedQuestions && assignedQuestions.length > 0 && (
+            <div className="inline-flex items-center gap-1 bg-indigo-900 border border-indigo-500 text-indigo-300 text-xs px-2 py-1 rounded-full mb-2">
+              🔒 Randomly assigned to you
+            </div>
+          )}
           <h3 className="text-xl mb-4">{question.title}</h3>
           <p className="text-gray-300 mb-4 whitespace-pre-wrap">{question.description}</p>
           <p className="text-sm text-gray-400">Points: {question.points}</p>
@@ -726,11 +879,62 @@ const ExamTake = () => {
               ))}
             </div>
           )}
+
+          {/* ── Submit Code — always visible in question panel bottom ── */}
+          <div className="mt-6 pt-4 border-t border-gray-700">
+            {(() => {
+              const qNum = activeQuestions[currentQuestion]?.questionNumber;
+              const alreadySubmitted = submittedQuestions.has(qNum);
+              const submittedCount   = submittedQuestions.size;
+              const totalCount       = activeQuestions.length;
+              return (
+                <div className="space-y-2">
+                  {/* Progress */}
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Submitted</span>
+                    <span className={submittedCount === totalCount ? 'text-green-400 font-bold' : ''}>
+                      {submittedCount} / {totalCount}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5 mb-3">
+                    <div
+                      className="bg-green-500 h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${(submittedCount / totalCount) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Submit Code button */}
+                  <button
+                    onClick={handleSubmitCode}
+                    disabled={!code.trim() || alreadySubmitted || isSubmitting}
+                    className={`w-full py-2.5 rounded-lg font-bold text-sm transition-colors ${
+                      alreadySubmitted
+                        ? 'bg-green-800 text-green-300 cursor-default'
+                        : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white shadow-lg'
+                    }`}
+                  >
+                    {alreadySubmitted ? '✓ Code Submitted for Q' + qNum : '📤 Submit Code for Q' + qNum}
+                  </button>
+
+                  {/* Test button — only on last question */}
+                  {currentQuestion === activeQuestions.length - 1 && !alreadySubmitted && (
+                    <button
+                      onClick={handleTestCode}
+                      disabled={executing || testRunning || !code.trim()}
+                      className="w-full py-2 rounded-lg font-semibold text-sm bg-yellow-500 hover:bg-yellow-400 text-gray-900 disabled:bg-gray-600 disabled:text-gray-400 transition-colors"
+                    >
+                      {testRunning ? '⏳ Running Tests…' : '🧪 Run Test Cases'}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Code editor */}
         <div className="flex-1 flex flex-col">
-          <div className="bg-gray-800 px-4 py-2 flex items-center space-x-4">
+          <div className="bg-gray-800 px-4 py-2 flex items-center space-x-3">
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -740,20 +944,47 @@ const ExamTake = () => {
                 <option key={lang} value={lang}>{lang}</option>
               ))}
             </select>
+
+            {/* Run Code — free run with custom input */}
             <button
               onClick={handleExecuteCode}
-              disabled={executing || !code.trim()}
-              className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700 disabled:bg-gray-600"
+              disabled={executing || testRunning || !code.trim()}
+              className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700 disabled:bg-gray-600 text-sm"
             >
-              {executing ? 'Running…' : 'Run Code'}
+              {executing ? 'Running…' : '▶ Run Code'}
             </button>
-            <button
-              onClick={handleSaveSubmission}
-              disabled={!code.trim()}
-              className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:bg-gray-600"
-            >
-              Save
-            </button>
+
+            {/* Submit Test — only on LAST question */}
+            {currentQuestion === activeQuestions.length - 1 && (
+              <button
+                onClick={handleTestCode}
+                disabled={executing || testRunning || !code.trim()}
+                className="bg-yellow-500 text-gray-900 px-4 py-1 rounded hover:bg-yellow-400 disabled:bg-gray-600 disabled:text-white font-semibold text-sm"
+              >
+                {testRunning ? 'Testing…' : '🧪 Test'}
+              </button>
+            )}
+
+            <div className="flex-1" />
+
+            {/* Submit Code — final submission for this question (right side of toolbar) */}
+            {(() => {
+              const qNum = activeQuestions[currentQuestion]?.questionNumber;
+              const alreadySubmitted = submittedQuestions.has(qNum);
+              return (
+                <button
+                  onClick={handleSubmitCode}
+                  disabled={!code.trim() || alreadySubmitted || isSubmitting}
+                  className={`px-5 py-1.5 rounded font-bold text-sm transition-colors shadow ${
+                    alreadySubmitted
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-orange-500 hover:bg-orange-600 text-white'
+                  }`}
+                >
+                  {alreadySubmitted ? '✓ Submitted' : '📤 Submit Code'}
+                </button>
+              );
+            })()}
           </div>
 
           <div className="flex-1">
@@ -780,21 +1011,119 @@ const ExamTake = () => {
             />
           </div>
 
-          {/* Output */}
-          <div className="h-48 bg-gray-800 border-t border-gray-700">
-            <div className="px-4 py-2 bg-gray-900 text-white text-sm font-semibold flex justify-between items-center">
-              <span>Output</span>
-              <button onClick={() => setOutput('')} className="text-xs text-gray-400 hover:text-white">Clear</button>
+          {/* Output + Test Results tabbed panel */}
+          <div className="h-56 bg-gray-800 border-t border-gray-700 flex flex-col">
+
+            {/* Tab bar */}
+            <div className="flex items-center bg-gray-900 border-b border-gray-700 px-2">
+              <button
+                onClick={() => setOutputTab('output')}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${
+                  outputTab === 'output'
+                    ? 'border-green-500 text-green-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                Output
+              </button>
+              <button
+                onClick={() => setOutputTab('tests')}
+                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1 ${
+                  outputTab === 'tests'
+                    ? 'border-yellow-400 text-yellow-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                🧪 Test Results
+                {testResults && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ml-1 ${
+                    testResults.every(r => r.passed) ? 'bg-green-700 text-green-200' : 'bg-red-700 text-red-200'
+                  }`}>
+                    {testResults.filter(r => r.passed).length}/{testResults.length}
+                  </span>
+                )}
+              </button>
+              <div className="ml-auto">
+                <button onClick={() => { setOutput(''); setTestResults(null); }}
+                  className="text-xs text-gray-500 hover:text-white px-2 py-1">Clear</button>
+              </div>
             </div>
-            <div
-              className="p-4 text-white font-mono text-sm overflow-y-auto h-40"
-              onCopy={(e) => e.preventDefault()}
-              onCut={(e) => e.preventDefault()}
-              onPaste={(e) => e.preventDefault()}
-              onContextMenu={(e) => e.preventDefault()}
-              style={{ userSelect: 'none' }}
-            >
-              <pre className="whitespace-pre-wrap">{output || 'Run your code to see output…'}</pre>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto">
+
+              {/* ── Output tab ── */}
+              {outputTab === 'output' && (
+                <div
+                  className="p-4 text-white font-mono text-sm h-full"
+                  onCopy={e => e.preventDefault()} onCut={e => e.preventDefault()}
+                  onPaste={e => e.preventDefault()} onContextMenu={e => e.preventDefault()}
+                  style={{ userSelect: 'none' }}
+                >
+                  <pre className="whitespace-pre-wrap">{output || 'Run your code to see output…'}</pre>
+                </div>
+              )}
+
+              {/* ── Test Results tab ── */}
+              {outputTab === 'tests' && (
+                <div className="p-3 space-y-2">
+                  {testRunning && (
+                    <div className="flex items-center gap-2 text-yellow-400 text-sm py-2">
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                      </svg>
+                      Running test cases…
+                    </div>
+                  )}
+                  {!testRunning && !testResults && (
+                    <p className="text-gray-500 text-sm py-2">Click 🧪 Submit Test to run against test cases</p>
+                  )}
+                  {testResults && testResults.map((r, idx) => (
+                    <div key={idx} className={`rounded-lg p-3 text-xs font-mono border ${
+                      r.passed
+                        ? 'bg-green-900 border-green-700 text-green-200'
+                        : 'bg-red-900 border-red-700 text-red-200'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-sm">{r.passed ? '✅' : '❌'} Test {idx + 1}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                          r.passed ? 'bg-green-700 text-green-100' : 'bg-red-700 text-red-100'
+                        }`}>{r.passed ? 'PASSED' : 'FAILED'}</span>
+                      </div>
+                      {r.input !== undefined && r.input !== '' && (
+                        <div className="grid grid-cols-3 gap-2 mt-1">
+                          <div>
+                            <span className="text-gray-400">Input:</span>
+                            <pre className="mt-0.5 whitespace-pre-wrap break-all">{r.input}</pre>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Expected:</span>
+                            <pre className="mt-0.5 whitespace-pre-wrap break-all text-green-300">{r.expected}</pre>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Your Output:</span>
+                            <pre className={`mt-0.5 whitespace-pre-wrap break-all ${r.passed ? 'text-green-300' : 'text-red-300'}`}>{r.actual}</pre>
+                          </div>
+                        </div>
+                      )}
+                      {(r.input === undefined || r.input === '') && (
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          <div><span className="text-gray-400">Expected:</span><pre className="mt-0.5 text-green-300">{r.expected}</pre></div>
+                          <div><span className="text-gray-400">Your Output:</span><pre className={`mt-0.5 ${r.passed ? 'text-green-300' : 'text-red-300'}`}>{r.actual}</pre></div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {testResults && (
+                    <div className={`text-center py-2 text-sm font-bold rounded-lg ${
+                      testResults.every(r => r.passed) ? 'text-green-400 bg-green-900' : 'text-red-400 bg-red-900'
+                    }`}>
+                      {testResults.filter(r => r.passed).length} / {testResults.length} test cases passed
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -804,6 +1133,49 @@ const ExamTake = () => {
       <div className="bg-yellow-600 text-white px-4 py-2 text-center text-sm">
         ⚠️ AI webcam proctoring is active. Do not switch tabs, exit fullscreen, or show prohibited items.
       </div>
+
+      {/* ── All Questions Submitted → Exit Modal ── */}
+      {showExitModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 text-center">
+            <div className="text-6xl mb-4">🎉</div>
+            <h2 className="text-2xl font-bold text-white mb-2">All Questions Submitted!</h2>
+            <p className="text-gray-300 mb-2">
+              You have submitted code for all {activeQuestions.length} question{activeQuestions.length > 1 ? 's' : ''}.
+            </p>
+            <p className="text-gray-400 text-sm mb-6">
+              Your submissions are visible to the faculty. You can now finish and exit the exam.
+            </p>
+
+            {/* Submitted summary */}
+            <div className="bg-gray-900 rounded-xl p-4 mb-6 text-left space-y-1">
+              {activeQuestions.map(q => (
+                <div key={q.questionNumber} className="flex items-center gap-2 text-sm">
+                  <span className="text-green-400 font-bold">✓</span>
+                  <span className="text-gray-300">Q{q.questionNumber} — {q.title}</span>
+                  <span className="ml-auto text-green-400 text-xs">Submitted</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowExitModal(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-3 rounded-xl font-semibold transition-colors"
+              >
+                Continue Reviewing
+              </button>
+              <button
+                onClick={handleSubmitExam}
+                disabled={isSubmitting}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white py-3 rounded-xl font-bold transition-colors"
+              >
+                {isSubmitting ? 'Finishing…' : '✓ Finish & Exit Exam'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
