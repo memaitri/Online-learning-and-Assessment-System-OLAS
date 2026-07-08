@@ -1,0 +1,151 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║               OLAS — HOW TO RUN (Copy-Paste Commands)                       ║
+║               Run each STEP in a SEPARATE terminal window                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BEFORE YOU START — ONE TIME SETUP  (only needed on first run / fresh clone)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open ONE terminal and run these in order:
+
+─── Step 1: Create MySQL database ──────────────────────────────────────────────
+
+mysql -u root -pmaitri -e "CREATE DATABASE IF NOT EXISTS olas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+
+─── Step 2: Install server dependencies ────────────────────────────────────────
+
+cd C:\Users\Maitri\Downloads\OLAS\server
+npm install
+
+
+─── Step 3: Install client dependencies ────────────────────────────────────────
+
+cd C:\Users\Maitri\Downloads\OLAS\client
+npm install
+
+
+─── Step 4: Install Python AI dependencies ─────────────────────────────────────
+
+pip install mediapipe opencv-python numpy ultralytics mammoth
+
+
+─── Step 5: Create .env files (only if they don't exist) ────────────────────────
+
+  SERVER .env  →  C:\Users\Maitri\Downloads\OLAS\server\.env
+  ┌─────────────────────────────────────────────────────────┐
+  │ PORT=5000                                               │
+  │ DATABASE_URL="mysql://root:maitri@localhost:3306/olas"  │
+  │ JWT_SECRET=olas_super_secret_jwt_key_2024               │
+  │ NODE_ENV=development                                    │
+  │ CLIENT_URL=http://localhost:5173                        │
+  └─────────────────────────────────────────────────────────┘
+
+  CLIENT .env  →  C:\Users\Maitri\Downloads\OLAS\client\.env
+  ┌─────────────────────────────────────────────────────────┐
+  │ VITE_API_URL=http://localhost:5000/api                  │
+  │ VITE_SOCKET_URL=http://localhost:5000                   │
+  └─────────────────────────────────────────────────────────┘
+
+
+─── Step 6: Push database schema (creates all tables) ───────────────────────────
+
+cd C:\Users\Maitri\Downloads\OLAS\server
+npx prisma db push
+npx prisma generate
+
+
+─── Step 7: Seed database with demo data ────────────────────────────────────────
+
+cd C:\Users\Maitri\Downloads\OLAS\server
+node utils/seed.js
+
+  This creates:
+  ✓ admin@olas.com      / admin123
+  ✓ faculty@olas.com    / faculty123
+  ✓ student@olas.com    / student123
+  ✓ 2 classes (DSA, Web Dev)
+  ✓ 1 sample exam
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  EVERY TIME YOU WANT TO RUN THE PROJECT
+  Open 2 separate terminal windows / tabs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TERMINAL 1 — Backend Server                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd C:\Users\Maitri\Downloads\OLAS\server
+node server.js
+
+  ✓ You should see:
+      🚀 Server running on port 5000
+      📡 Socket.IO ready for connections
+      ✅ Connected to MySQL Database
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TERMINAL 2 — Frontend (React)                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+cd C:\Users\Maitri\Downloads\OLAS\client
+npm run dev
+
+  ✓ You should see:
+      VITE v5.x  ready in xxx ms
+      ➜  Local:   http://localhost:5173/
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  THEN OPEN YOUR BROWSER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  http://localhost:5173
+
+  Login credentials:
+  ┌──────────────┬────────────────────────┬────────────────┐
+  │ Role         │ Email                  │ Password       │
+  ├──────────────┼────────────────────────┼────────────────┤
+  │ Admin        │ admin@olas.com         │ admin123       │
+  │ Faculty      │ faculty@olas.com       │ faculty123     │
+  │ Student      │ student@olas.com       │ student123     │
+  └──────────────┴────────────────────────┴────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ► The Python AI proctoring engine (face detection, gaze tracking, phone
+    detection) starts automatically when a student begins an exam.
+    You do NOT need to start it manually.
+
+  ► On the very first exam start, Python will download the AI model files
+    (~10 MB total). This takes ~30 seconds. After that it is instant.
+
+  ► The webcam is required to start an exam. Allow camera access when
+    the browser asks.
+
+  ► MySQL must be running before you start the server.
+    To check: mysql -u root -pmaitri -e "SELECT 1;"
+
+  ► If you get a port conflict on 5000 or 5173, make sure no other
+    Node processes are running:
+        taskkill /F /IM node.exe
+
+  ► To re-seed the database (reset all data):
+        cd C:\Users\Maitri\Downloads\OLAS\server
+        node utils/seed.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE — PORT SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Frontend   →  http://localhost:5173
+  Backend    →  http://localhost:5000
+  MySQL      →  localhost:3306  (database: olas)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
