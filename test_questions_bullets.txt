@@ -1,0 +1,15 @@
+- Write a program to implement a stack using an array and perform push, pop, and peek operations.
+
+- Write a program to find all prime numbers between 1 and 100 using the Sieve of Eratosthenes.
+
+- Write a program to check whether two strings are anagrams of each other.
+
+- Write a program to find the second largest element in an array without sorting.
+
+- Write a program to implement binary search on a sorted array.
+
+- Write a program to remove duplicate elements from an array.
+
+- Write a program to find the frequency of each character in a string.
+
+- Write a program to calculate the power of a number without using built-in power functions.
