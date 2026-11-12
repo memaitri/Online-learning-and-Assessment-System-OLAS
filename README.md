@@ -1,12 +1,13 @@
 # OLAS — Online Learning and Assessment System
 
-> A full-stack, AI-powered online examination platform with real-time proctoring, randomised question assignment, live faculty monitoring, and secure code execution.
+> A full-stack, AI-powered online examination platform built for educational institutions that need secure, monitored, and fair assessments — without the need for physical invigilation.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [The Problem We're Solving](#the-problem-were-solving)
+- [Who Benefits](#who-benefits)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
@@ -15,76 +16,118 @@
 - [Project Structure](#project-structure)
 - [AI Proctoring System](#ai-proctoring-system)
 - [Randomised Question Assignment](#randomised-question-assignment)
+- [Audio Proctoring](#audio-proctoring)
 - [API Reference](#api-reference)
-- [Screenshots](#screenshots)
 - [License](#license)
 
 ---
 
-## Overview
+## The Problem We're Solving
 
-OLAS is a comprehensive online assessment platform designed for educational institutions. It combines a full-featured coding examination interface with an intelligent AI proctoring engine that monitors students via webcam in real time — detecting phone usage, multiple faces, gaze direction, and head pose. Faculty can create exams, upload question banks, assign questions randomly to students, monitor live sessions, and review submitted code.
+Online assessments are broken. When students take exams remotely, institutions face a simple but hard problem: **how do you ensure academic integrity without a physical invigilator in the room?**
+
+Common issues with existing solutions:
+
+- **Cheating is easy** — students can switch tabs, open notes, use their phone, or have someone else in the room without any detection.
+- **Question sharing** — when all students get the same question, answers circulate within minutes via WhatsApp or Discord.
+- **Faculty have no visibility** — they submit the exam and hope for the best, with no insight into what happened during the session.
+- **Proctoring tools are expensive** — enterprise solutions like ProctorU cost thousands per institution and require students to install heavyweight software.
+- **Code exams have no execution** — most LMS platforms don't let students actually run and test their code during the exam.
+
+OLAS solves all of this in a single open-source platform. It combines a fully functional coding examination environment with an AI proctoring engine that monitors students in real time — detecting phones, multiple people, gaze direction, and suspicious audio — while giving faculty complete live visibility into every session.
+
+---
+
+## Who Benefits
+
+### Students
+Get a fair, transparent exam experience with a professional code editor, instant code execution, and clear rules. No surprises, no ambiguity.
+
+### Faculty / Instructors
+Create exams in minutes, upload question banks from Word or text files, assign questions randomly to prevent sharing, and watch every student's session live — including their risk score, violations, and submitted code.
+
+### Academic Institutions
+Deploy a full proctoring and assessment system without paying enterprise licensing fees. Self-host it, own the data, and customise it to your institution's needs.
+
+### Students in Remote / Hybrid Programs
+Participate in proctored assessments from home without needing to travel to a testing centre or install heavyweight proctoring agents.
 
 ---
 
 ## Features
 
-### Student
-- 🔐 Secure login with JWT authentication
-- 📋 View enrolled classes and scheduled exams
-- 🖥️ Fullscreen-enforced exam environment
-- 💻 Monaco code editor (VS Code engine) with syntax highlighting
-- ▶️ Run code with custom input and see output instantly
-- 🧪 Test code against question test cases
-- 📤 Submit code per question — visible to faculty immediately
-- 🎲 Assigned a unique randomised question (if enabled by faculty)
-- ⏱️ Real-time countdown timer with auto-submit on expiry
-- 🔒 Browser-level anti-cheat: blocks tab switch, copy/paste, DevTools, right-click
+### For Students
 
-### Faculty
-- 📝 Create exams with custom questions, time windows, and language options
-- 📂 Upload question bank from `.txt`, `.doc`, or `.docx` files
-- ✏️ Auto-extract, preview, edit, and save questions from uploaded files
-- 🎲 Enable random question assignment per student
-  - Mode 1: Unique (no repeats)
-  - Mode 2: Allow repetition (for large cohorts)
-  - Reproducible seed for audit purposes
-- 👁️ Preview allocation before publishing
-- 📊 Live exam monitor: active students, violations, submissions
-- 📋 View each student's submitted code per question
-- 🏆 Grade submissions with score and feedback inline
-- 🔓 Unblock students and reset violations
+| Feature | Description |
+|---|---|
+| **Secure Login** | JWT-based authentication with role enforcement |
+| **Dashboard** | View enrolled classes, upcoming exams, active exams, and past results |
+| **Fullscreen Enforcement** | Exam automatically enters fullscreen; exiting counts as a violation |
+| **Monaco Code Editor** | The same engine powering VS Code — syntax highlighting, autocomplete, multiple languages |
+| **Multi-language Support** | Write and run code in JavaScript, Python, Java, C, or C++ |
+| **Code Execution** | Run code with custom input and see stdout/stderr instantly |
+| **Test Cases** | Test code against faculty-defined test cases before submitting |
+| **Per-question Submission** | Submit each question independently; faculty sees it immediately |
+| **Randomised Question** | Each student gets a unique question from the bank (if faculty enables it) |
+| **Real-time Timer** | Countdown with auto-submit when time expires |
+| **Anti-cheat Controls** | Blocks tab switching, copy/paste, right-click, DevTools, and keyboard shortcuts |
+| **AI Webcam Monitoring** | Real-time risk scoring via webcam — phone, face count, gaze, head pose |
+| **Audio Monitoring** | Microphone-based speech and noise detection |
+| **Violation Tracking** | Each violation is logged with timestamp and type |
+| **Session Resume** | Reconnect and continue an in-progress exam if connection drops |
 
-### Admin
-- 👥 Manage all users (create, edit, delete)
-- 🏫 Manage all classes and enrolments
-- 📋 Full access to all exams and monitoring dashboards
+### For Faculty
 
-### AI Proctoring Engine (Python)
-- 👤 Face detection (MediaPipe BlazeFace)
-- 📐 478-point facial landmark tracking (MediaPipe FaceLandmarker)
-- 👁️ Gaze direction tracking (iris ratio geometry)
-- 🔄 Head pose estimation (yaw / pitch / roll from transformation matrix)
-- 📱 Phone detection (YOLOv8n — COCO class 67)
-- 📊 Cumulative risk score (0–100) with five levels: SAFE / LOW / MEDIUM / HIGH / CRITICAL
-- ⚡ Real-time live feed: shows exactly what was detected each frame
-- 📄 Session report generated on exam submission
+| Feature | Description |
+|---|---|
+| **Exam Creation** | Set title, class, start/end times, duration, language options, and max violations |
+| **Question Bank Upload** | Upload `.txt`, `.doc`, or `.docx` — questions auto-extracted and editable |
+| **Manual Questions** | Add or edit questions directly in the exam creation form |
+| **Random Assignment** | Toggle to assign unique questions per student from the uploaded bank |
+| **Assignment Preview** | See exactly which student gets which question before publishing |
+| **Reproducible Seed** | Set a seed number for identical distributions across re-runs (audit-friendly) |
+| **Two Assignment Modes** | Unique (no repeats) or Allow Repetition (for large cohorts) |
+| **Live Exam Monitor** | Real-time view of all active students, their risk levels, violation counts, and submission status |
+| **Code Review** | Read each student's submitted code per question inline |
+| **Grading** | Assign score and written feedback per submission |
+| **Student Blocking** | Block a student mid-exam if violations exceed threshold |
+| **Unblock Students** | Manually unblock a student and reset their violation count |
+| **Proctoring Reports** | View the full AI session report after exam ends |
+
+### For Admins
+
+| Feature | Description |
+|---|---|
+| **User Management** | Create, view, reset passwords, and delete users across all roles |
+| **Class Management** | View and delete all classes and their enrolments |
+| **Exam Oversight** | Monitor all exams across all faculty |
+| **System-wide Stats** | Total users, classes, exams, and violations at a glance |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | React 18, Vite, Tailwind CSS, Axios, Socket.IO client |
-| **Code Editor** | Monaco Editor (`@monaco-editor/react`) |
-| **Backend** | Node.js, Express.js |
-| **Database** | MySQL 8, Prisma ORM |
-| **Real-time** | Socket.IO |
-| **Auth** | JWT (jsonwebtoken), bcryptjs |
-| **AI Engine** | Python 3.13, MediaPipe 0.10, OpenCV, YOLOv8 (ultralytics), NumPy |
-| **File Parsing** | multer, mammoth (`.docx` → text) |
-| **Edge Proxy** | Cloudflare Workers (TypeScript) — Supabase reverse proxy |
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Frontend** | React 18, Vite 5 | UI framework and dev server |
+| **Styling** | Tailwind CSS 3 | Utility-first CSS |
+| **Code Editor** | Monaco Editor (`@monaco-editor/react`) | In-browser VS Code engine |
+| **Routing** | React Router v6 | Client-side navigation |
+| **HTTP Client** | Axios | REST API calls |
+| **Real-time** | Socket.IO (client + server) | Live exam monitoring and violation push |
+| **Notifications** | react-hot-toast | In-app toast messages |
+| **Backend** | Node.js + Express.js | REST API server |
+| **Database** | MySQL 8 | Relational data store |
+| **ORM** | Prisma 5 | Type-safe DB queries and migrations |
+| **Auth** | JWT (jsonwebtoken) + bcryptjs | Stateless authentication and password hashing |
+| **File Parsing** | multer + mammoth | Upload handling and `.docx` → text extraction |
+| **Code Execution** | Sandboxed subprocess (Node.js `vm` / shell) | Safe code runner |
+| **AI Engine** | Python 3.10+, MediaPipe 0.10, OpenCV | Face detection and landmark tracking |
+| **Object Detection** | YOLOv8n (ultralytics) | Real-time phone detection |
+| **Audio Detection** | PyAudio | Microphone-based speech and noise analysis |
+| **Risk Engine** | Custom Python scoring engine | Cumulative 0–100 risk score per session |
+| **Edge Proxy** | Cloudflare Workers (TypeScript) | Supabase reverse proxy |
+| **Process Bridge** | Node.js `child_process.spawn` + stdin/stdout pipes | Node ↔ Python IPC |
 
 ---
 
@@ -100,7 +143,7 @@ OLAS is a comprehensive online assessment platform designed for educational inst
 ┌────────────────────────────────────────────────────────────────┐
 │              Node.js / Express  (port 5000)                    │
 │  Auth · Classes · Exams · Submissions · Violations             │
-│  Question Bank · Proctoring Controller                         │
+│  Question Bank · Proctoring Controller · Code Sandbox          │
 │                        │                                       │
 │          proctoringService.js  ←──  stdin/stdout pipe          │
 └───────────────────────┬────────────────────────────────────────┘
@@ -109,7 +152,7 @@ OLAS is a comprehensive online assessment platform designed for educational inst
 ┌────────────────────────────────────────────────────────────────┐
 │         Python AI Engine  (frame_server.py)                    │
 │  FaceDetector · FaceMesh · GazeTracker · HeadPoseEstimator     │
-│  PhoneService (YOLOv8) · RiskService (0–100 score)             │
+│  PhoneService (YOLOv8) · AudioDetector · RiskService (0–100)   │
 └────────────────────────────────────────────────────────────────┘
                         │
                         ▼
@@ -166,7 +209,7 @@ npm run dev              # Starts on port 5173
 
 ```bash
 cd ../proctoring
-pip install mediapipe opencv-python numpy ultralytics mammoth
+pip install mediapipe opencv-python numpy ultralytics pyaudio mammoth
 # Model files (.tflite, .task, .pt) are auto-downloaded on first run
 ```
 
@@ -265,6 +308,10 @@ OLAS/
 │   │   ├── phone_detector.py
 │   │   ├── phone_service.py        # Background thread + queue
 │   │   └── phone_models.py
+│   ├── audio_detection/            # Microphone speech detector
+│   │   ├── audio_detector.py
+│   │   ├── audio_service.py        # Background thread
+│   │   └── audio_models.py
 │   ├── risk_engine/                # Scoring engine (0–100)
 │   │   ├── risk_models.py          # EventType, RiskLevel, dataclasses
 │   │   ├── risk_config.py          # Weights and thresholds
@@ -281,7 +328,22 @@ OLAS/
 
 ## AI Proctoring System
 
-The proctoring engine runs as a Python subprocess spawned by Node.js. Communication is over OS pipes (stdin/stdout) using a line-delimited protocol.
+The proctoring engine runs as a Python subprocess spawned by Node.js. The browser sends webcam frames to the Node server, which pipes them through to the Python engine over OS stdin/stdout using a line-delimited JSON protocol.
+
+### What It Detects
+
+| Detection | Method | Details |
+|---|---|---|
+| **Face presence** | MediaPipe BlazeFace | Detects 0, 1, or multiple faces |
+| **Face landmarks** | MediaPipe FaceLandmarker | 478-point mesh per face |
+| **Gaze direction** | Iris ratio geometry | LEFT / RIGHT / UP / DOWN / CENTER |
+| **Head pose** | Transformation matrix | Yaw / pitch / roll in degrees |
+| **Phone usage** | YOLOv8n (COCO class 67) | Detects mobile phones in frame |
+| **Audio / speech** | PyAudio RMS analysis | Sustained speech or sudden noise spikes |
+| **Tab switching** | Browser focus events | Injected from frontend via violation API |
+| **Fullscreen exit** | Fullscreen change events | Injected from frontend via violation API |
+| **Copy / paste** | Keyboard event listeners | Injected from frontend via violation API |
+| **DevTools** | Window size heuristics | Injected from frontend via violation API |
 
 ### Protocol
 
@@ -298,49 +360,68 @@ Python → Node stdout:
 
 ### Risk Score Weights
 
-| Event | Weight |
+| Event | Points Added |
 |---|---|
-| Phone detected | +50 pts |
-| Multiple faces | +30 pts |
-| No face | +15 pts |
-| Head turned away | +8 pts |
-| Looking away | +5 pts |
+| Phone detected | +50 |
+| Multiple faces in frame | +30 |
+| No face detected | +15 |
+| Head turned away | +8 |
+| Looking away (gaze) | +5 |
+| Speech detected (audio) | +10 |
+| Noise spike | +20 |
+| Tab switch / fullscreen exit | +10 |
 
 ### Risk Levels
 
-| Score | Level |
-|---|---|
-| 0–20 | SAFE |
-| 21–40 | LOW |
-| 41–60 | MEDIUM |
-| 61–80 | HIGH |
-| 81–100 | CRITICAL |
+| Score | Level | Colour |
+|---|---|---|
+| 0–20 | SAFE | Green |
+| 21–40 | LOW | Light green |
+| 41–60 | MEDIUM | Yellow |
+| 61–80 | HIGH | Orange |
+| 81–100 | CRITICAL | Red |
 
 ---
 
 ## Randomised Question Assignment
 
-Faculty can upload a question bank (`.txt`, `.doc`, `.docx`) and enable random assignment when creating an exam.
+Faculty can upload a question bank (`.txt`, `.doc`, `.docx`) and enable random assignment when creating an exam. This prevents students from sharing answers because each student gets a different question.
 
-### Modes
+### Assignment Modes
 
 | Mode | Behaviour |
 |---|---|
-| Unique Assignment | No question repeats until all questions are used |
-| Allow Repetition | Multiple students can receive the same question |
+| **Unique Assignment** | No question repeats until all questions are exhausted |
+| **Allow Repetition** | Multiple students can receive the same question (useful when students > questions) |
 
 ### Reproducible Seed
 
-Setting a **Random Seed** (e.g. `42`) guarantees the same distribution every time — useful for re-evaluation and audit.
+Setting a **Random Seed** (e.g. `42`) guarantees the same distribution every time — useful for re-evaluation, appeals, and audit trails.
 
 ### Workflow
 
-1. Create exam → Upload file or add questions manually
+1. Create exam → Upload `.txt`/`.doc`/`.docx` or add questions manually
 2. Toggle **🎲 Random Question Assignment**
-3. Set questions per student and mode
-4. Click **👁 Preview Allocation** — see exactly which student gets which question
+3. Set questions per student and choose mode
+4. Click **👁 Preview Allocation** — see exactly which student gets which question before saving
 5. Click **Create Exam & Assign Questions** — assignments written to DB atomically
 6. Students see only their assigned question with a 🔒 badge
+
+---
+
+## Audio Proctoring
+
+The audio module runs as a background thread inside the Python engine, analysing the student's microphone in real time.
+
+| Setting | Default | Description |
+|---|---|---|
+| Sample rate | 16,000 Hz | Standard for speech detection |
+| Chunk size | 1,024 frames | ~64 ms per analysis window |
+| RMS speech threshold | 500 | Normal speech detection sensitivity |
+| RMS spike threshold | 4,000 | Sudden shout or loud noise |
+| Speech timeout | 3 seconds | Sustained speech before violation fires |
+
+Violations are fed directly into the risk engine and appear on the faculty monitor in real time.
 
 ---
 
@@ -358,9 +439,25 @@ Setting a **Random Seed** (e.g. `42`) guarantees the same distribution every tim
 |---|---|---|
 | GET | `/api/exams` | List exams (role-filtered) |
 | POST | `/api/exams` | Create exam |
+| PUT | `/api/exams/:id` | Edit exam |
+| DELETE | `/api/exams/:id` | Delete exam |
 | POST | `/api/exams/:id/start` | Start exam session |
 | POST | `/api/exams/:id/submit` | Submit exam |
 | GET | `/api/exams/:id/sessions` | All student sessions (faculty) |
+
+### Submissions
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/submissions` | Submit code for a question |
+| GET | `/api/submissions/exam/:id` | Get all submissions for an exam |
+| POST | `/api/submissions/:id/grade` | Grade a submission |
+
+### Violations
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/violations` | Record a violation |
+| GET | `/api/violations/session/:id` | Get violations for a session |
+| POST | `/api/violations/unblock` | Unblock a student |
 
 ### Question Bank
 | Method | Endpoint | Description |
@@ -370,7 +467,7 @@ Setting a **Random Seed** (e.g. `42`) guarantees the same distribution every tim
 | GET | `/api/question-bank/:examId` | Get bank for exam |
 | POST | `/api/question-bank/:examId/assign` | Assign questions randomly |
 | GET | `/api/question-bank/:examId/assignments` | Faculty assignment view |
-| GET | `/api/question-bank/:examId/my-question` | Student assigned question |
+| GET | `/api/question-bank/:examId/my-question` | Student's assigned question |
 
 ### Proctoring
 | Method | Endpoint | Description |
