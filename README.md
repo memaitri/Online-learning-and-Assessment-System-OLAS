@@ -1,177 +1,271 @@
-# OLAS — Online Learning and Assessment System
+<div align="center">
 
-> A full-stack, AI-powered online examination platform built for educational institutions that need secure, monitored, and fair assessments — without the need for physical invigilation.
+# 🎓 OLAS
+### Online Learning & Assessment System
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-18.2-61DAFB?style=for-the-badge&logo=react&logoColor=white" />
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Prisma-5-2D3748?style=for-the-badge&logo=prisma&logoColor=white" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/YOLOv8-Phone%20Detection-FF6B35?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/MediaPipe-Face%20AI-00897B?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Socket.IO-Real--Time-010101?style=for-the-badge&logo=socket.io&logoColor=white" />
+  <img src="https://img.shields.io/badge/Monaco-Code%20Editor-007ACC?style=for-the-badge&logo=visual-studio-code&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
+</p>
+
+<br/>
+
+> **A full-stack, AI-powered online examination platform** built for educational institutions that need secure, monitored, and fair assessments — without the need for physical invigilation.
+
+<br/>
+
+[✨ Features](#-features) • [🛠 Tech Stack](#-tech-stack) • [🏗 Architecture](#-architecture) • [🚀 Getting Started](#-getting-started) • [🤖 AI Proctoring](#-ai-proctoring-system) • [📡 API Reference](#-api-reference)
+
+</div>
 
 ---
 
-## Table of Contents
-
-- [The Problem We're Solving](#the-problem-were-solving)
-- [Who Benefits](#who-benefits)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Project Structure](#project-structure)
-- [AI Proctoring System](#ai-proctoring-system)
-- [Randomised Question Assignment](#randomised-question-assignment)
-- [Audio Proctoring](#audio-proctoring)
-- [API Reference](#api-reference)
-- [License](#license)
-
----
-
-## The Problem We're Solving
+## 🧩 The Problem We're Solving
 
 Online assessments are broken. When students take exams remotely, institutions face a simple but hard problem: **how do you ensure academic integrity without a physical invigilator in the room?**
 
-Common issues with existing solutions:
-
-- **Cheating is easy** — students can switch tabs, open notes, use their phone, or have someone else in the room without any detection.
-- **Question sharing** — when all students get the same question, answers circulate within minutes via WhatsApp or Discord.
-- **Faculty have no visibility** — they submit the exam and hope for the best, with no insight into what happened during the session.
-- **Proctoring tools are expensive** — enterprise solutions like ProctorU cost thousands per institution and require students to install heavyweight software.
-- **Code exams have no execution** — most LMS platforms don't let students actually run and test their code during the exam.
-
-OLAS solves all of this in a single open-source platform. It combines a fully functional coding examination environment with an AI proctoring engine that monitors students in real time — detecting phones, multiple people, gaze direction, and suspicious audio — while giving faculty complete live visibility into every session.
+| ❌ Common Pain Points | ✅ How OLAS Solves It |
+|---|---|
+| Students switch tabs, open notes, or use phones | AI webcam + audio monitoring with real-time risk scoring |
+| All students share the same question on WhatsApp | Randomised per-student question assignment with seeded RNG |
+| Faculty have zero live visibility | Real-time exam monitor with risk levels, code updates, and violation alerts |
+| Enterprise proctoring tools cost thousands | Open-source, self-hosted, free forever |
+| LMS platforms don't execute code | Built-in sandboxed multi-language code runner |
 
 ---
 
-## Who Benefits
+## 👥 Who Benefits
 
-### Students
-Get a fair, transparent exam experience with a professional code editor, instant code execution, and clear rules. No surprises, no ambiguity.
+<table>
+<tr>
+<td align="center" width="25%">
 
-### Faculty / Instructors
-Create exams in minutes, upload question banks from Word or text files, assign questions randomly to prevent sharing, and watch every student's session live — including their risk score, violations, and submitted code.
+**🎓 Students**
 
-### Academic Institutions
-Deploy a full proctoring and assessment system without paying enterprise licensing fees. Self-host it, own the data, and customise it to your institution's needs.
+Fair, transparent exam experience with a professional code editor, instant execution, and clear rules.
 
-### Students in Remote / Hybrid Programs
-Participate in proctored assessments from home without needing to travel to a testing centre or install heavyweight proctoring agents.
+</td>
+<td align="center" width="25%">
 
----
+**👨‍🏫 Faculty**
 
-## Features
+Create exams in minutes, upload question banks from Word files, and watch every session live.
 
-### For Students
+</td>
+<td align="center" width="25%">
 
-| Feature | Description |
-|---|---|
-| **Secure Login** | JWT-based authentication with role enforcement |
-| **Dashboard** | View enrolled classes, upcoming exams, active exams, and past results |
-| **Fullscreen Enforcement** | Exam automatically enters fullscreen; exiting counts as a violation |
-| **Monaco Code Editor** | The same engine powering VS Code — syntax highlighting, autocomplete, multiple languages |
-| **Multi-language Support** | Write and run code in JavaScript, Python, Java, C, or C++ |
-| **Code Execution** | Run code with custom input and see stdout/stderr instantly |
-| **Test Cases** | Test code against faculty-defined test cases before submitting |
-| **Per-question Submission** | Submit each question independently; faculty sees it immediately |
-| **Randomised Question** | Each student gets a unique question from the bank (if faculty enables it) |
-| **Real-time Timer** | Countdown with auto-submit when time expires |
-| **Anti-cheat Controls** | Blocks tab switching, copy/paste, right-click, DevTools, and keyboard shortcuts |
-| **AI Webcam Monitoring** | Real-time risk scoring via webcam — phone, face count, gaze, head pose |
-| **Audio Monitoring** | Microphone-based speech and noise detection |
-| **Violation Tracking** | Each violation is logged with timestamp and type |
-| **Session Resume** | Reconnect and continue an in-progress exam if connection drops |
+**🏛 Institutions**
 
-### For Faculty
+Deploy a full proctoring system without enterprise licensing. Self-host it, own your data.
 
-| Feature | Description |
-|---|---|
-| **Exam Creation** | Set title, class, start/end times, duration, language options, and max violations |
-| **Question Bank Upload** | Upload `.txt`, `.doc`, or `.docx` — questions auto-extracted and editable |
-| **Manual Questions** | Add or edit questions directly in the exam creation form |
-| **Random Assignment** | Toggle to assign unique questions per student from the uploaded bank |
-| **Assignment Preview** | See exactly which student gets which question before publishing |
-| **Reproducible Seed** | Set a seed number for identical distributions across re-runs (audit-friendly) |
-| **Two Assignment Modes** | Unique (no repeats) or Allow Repetition (for large cohorts) |
-| **Live Exam Monitor** | Real-time view of all active students, their risk levels, violation counts, and submission status |
-| **Code Review** | Read each student's submitted code per question inline |
-| **Grading** | Assign score and written feedback per submission |
-| **Student Blocking** | Block a student mid-exam if violations exceed threshold |
-| **Unblock Students** | Manually unblock a student and reset their violation count |
-| **Proctoring Reports** | View the full AI session report after exam ends |
+</td>
+<td align="center" width="25%">
 
-### For Admins
+**🌍 Remote Learners**
 
-| Feature | Description |
-|---|---|
-| **User Management** | Create, view, reset passwords, and delete users across all roles |
-| **Class Management** | View and delete all classes and their enrolments |
-| **Exam Oversight** | Monitor all exams across all faculty |
-| **System-wide Stats** | Total users, classes, exams, and violations at a glance |
+Take proctored assessments from home without travelling to a testing centre.
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Tech Stack
+## ✨ Features
 
-| Layer | Technology | Purpose |
+### 🎓 Student Experience
+
+| Feature | Description |
+|---|---|
+| 🔐 **Secure Login** | JWT-based authentication with role enforcement |
+| 📊 **Dashboard** | View enrolled classes, upcoming exams, active exams, and past results |
+| 🖥 **Fullscreen Enforcement** | Exam auto-enters fullscreen; exiting counts as a violation |
+| ⌨️ **Monaco Code Editor** | The same engine powering VS Code — syntax highlighting, autocomplete |
+| 🌐 **Multi-language Support** | Write and run code in JavaScript, Python, Java, C, or C++ |
+| ▶️ **Code Execution** | Run code with custom input and see stdout/stderr instantly |
+| 🧪 **Test Cases** | Test code against faculty-defined test cases before submitting |
+| 📤 **Per-question Submission** | Submit each question independently; faculty sees it immediately |
+| 🎲 **Randomised Question** | Each student gets a unique question (if faculty enables it) |
+| ⏱ **Real-time Timer** | Countdown with auto-submit when time expires |
+| 🛡 **Anti-cheat Controls** | Blocks tab switching, copy/paste, right-click, DevTools, keyboard shortcuts |
+| 👁 **AI Webcam Monitoring** | Real-time risk scoring — phone, face count, gaze, head pose |
+| 🎙 **Audio Monitoring** | Microphone-based speech and noise detection |
+| 📋 **Violation Tracking** | Each violation logged with timestamp and type |
+| 🔄 **Session Resume** | Reconnect and continue if connection drops |
+
+### 👨‍🏫 Faculty Tools
+
+| Feature | Description |
+|---|---|
+| 📝 **Exam Creation** | Set title, class, times, duration, languages, and max violations |
+| 📁 **Question Bank Upload** | Upload `.txt`, `.doc`, `.docx` — questions auto-extracted |
+| ✏️ **Manual Questions** | Add or edit questions directly in the exam creation form |
+| 🎲 **Random Assignment** | Toggle to assign unique questions per student from the bank |
+| 👁 **Assignment Preview** | See exactly which student gets which question before publishing |
+| 🌱 **Reproducible Seed** | Set a seed for identical distributions across re-runs (audit-friendly) |
+| 🔀 **Two Assignment Modes** | Unique (no repeats) or Allow Repetition (for large cohorts) |
+| 📡 **Live Exam Monitor** | Real-time view of all students — risk level, violations, submission status |
+| 💻 **Code Review** | Read each student's submitted code per question inline |
+| 🏆 **Grading** | Assign score and written feedback per submission |
+| 🚫 **Student Blocking** | Block a student mid-exam if violations exceed threshold |
+| ✅ **Unblock Students** | Manually unblock and reset their violation count |
+| 📊 **Proctoring Reports** | Full AI session report after the exam ends |
+
+### 🔧 Admin Controls
+
+| Feature | Description |
+|---|---|
+| 👥 **User Management** | Create, view, reset passwords, and delete users across all roles |
+| 🏫 **Class Management** | View and delete all classes and their enrolments |
+| 📋 **Exam Oversight** | Monitor all exams across all faculty |
+| 📈 **System-wide Stats** | Total users, classes, exams, and violations at a glance |
+
+---
+
+## 🛠 Tech Stack
+
+### 🖥 Frontend
+
+<p>
+  <img src="https://img.shields.io/badge/React-18.2-61DAFB?style=flat-square&logo=react" />
+  <img src="https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=flat-square&logo=tailwind-css" />
+  <img src="https://img.shields.io/badge/React_Router-v6-CA4245?style=flat-square&logo=react-router" />
+  <img src="https://img.shields.io/badge/Axios-1.6-5A29E4?style=flat-square" />
+  <img src="https://img.shields.io/badge/Socket.IO_Client-4.6-010101?style=flat-square&logo=socket.io" />
+  <img src="https://img.shields.io/badge/Monaco_Editor-4.6-007ACC?style=flat-square&logo=visual-studio-code" />
+</p>
+
+| Package | Version | Role |
 |---|---|---|
-| **Frontend** | React 18, Vite 5 | UI framework and dev server |
-| **Styling** | Tailwind CSS 3 | Utility-first CSS |
-| **Code Editor** | Monaco Editor (`@monaco-editor/react`) | In-browser VS Code engine |
-| **Routing** | React Router v6 | Client-side navigation |
-| **HTTP Client** | Axios | REST API calls |
-| **Real-time** | Socket.IO (client + server) | Live exam monitoring and violation push |
-| **Notifications** | react-hot-toast | In-app toast messages |
-| **Backend** | Node.js + Express.js | REST API server |
-| **Database** | MySQL 8 | Relational data store |
-| **ORM** | Prisma 5 | Type-safe DB queries and migrations |
-| **Auth** | JWT (jsonwebtoken) + bcryptjs | Stateless authentication and password hashing |
-| **File Parsing** | multer + mammoth | Upload handling and `.docx` → text extraction |
-| **Code Execution** | Sandboxed subprocess (Node.js `vm` / shell) | Safe code runner |
-| **AI Engine** | Python 3.10+, MediaPipe 0.10, OpenCV | Face detection and landmark tracking |
-| **Object Detection** | YOLOv8n (ultralytics) | Real-time phone detection |
-| **Audio Detection** | PyAudio | Microphone-based speech and noise analysis |
-| **Risk Engine** | Custom Python scoring engine | Cumulative 0–100 risk score per session |
-| **Edge Proxy** | Cloudflare Workers (TypeScript) | Supabase reverse proxy |
-| **Process Bridge** | Node.js `child_process.spawn` + stdin/stdout pipes | Node ↔ Python IPC |
+| React | 18.2 | UI framework |
+| Vite | 5 | Dev server and build tool |
+| Tailwind CSS | 3.4 | Utility-first styling |
+| React Router | v6.21 | Client-side navigation |
+| Axios | 1.6 | REST API calls |
+| Socket.IO Client | 4.6 | Real-time push events |
+| `@monaco-editor/react` | 4.6 | Embedded VS Code editor engine |
+| react-hot-toast | 2.4 | In-app toast notifications |
+
+### ⚙️ Backend
+
+<p>
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js" />
+  <img src="https://img.shields.io/badge/Express.js-4.18-000000?style=flat-square&logo=express" />
+  <img src="https://img.shields.io/badge/Prisma-5.22-2D3748?style=flat-square&logo=prisma" />
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=flat-square&logo=mysql" />
+  <img src="https://img.shields.io/badge/JWT-9.0-000000?style=flat-square&logo=json-web-tokens" />
+  <img src="https://img.shields.io/badge/Socket.IO-4.6-010101?style=flat-square&logo=socket.io" />
+</p>
+
+| Package | Version | Role |
+|---|---|---|
+| Node.js | >= 18 | Runtime |
+| Express.js | 4.18 | REST API server |
+| Socket.IO | 4.6 | WebSocket server |
+| Prisma ORM | 5.22 | Type-safe DB access and migrations |
+| MySQL | 8.0 | Relational database |
+| jsonwebtoken | 9.0 | Stateless JWT authentication |
+| bcryptjs | 2.4 | Password hashing |
+| multer | 2.2 | Multipart file upload handling |
+| mammoth | 1.12 | `.docx` to plain text extraction |
+| express-validator | 7.0 | Input validation |
+
+### 🤖 Python AI Engine
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python" />
+  <img src="https://img.shields.io/badge/MediaPipe-0.10-00897B?style=flat-square" />
+  <img src="https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=flat-square&logo=opencv" />
+  <img src="https://img.shields.io/badge/YOLOv8-ultralytics-FF6B35?style=flat-square" />
+  <img src="https://img.shields.io/badge/PyAudio-audio-FF6B35?style=flat-square" />
+  <img src="https://img.shields.io/badge/NumPy-1.x-013243?style=flat-square&logo=numpy" />
+</p>
+
+| Library | Role |
+|---|---|
+| MediaPipe 0.10 | BlazeFace detection + 478-landmark face mesh |
+| OpenCV (`cv2`) | Frame decoding and image processing |
+| NumPy | Array math operations |
+| YOLOv8n (`ultralytics`) | Real-time phone detection (COCO class 67) |
+| PyAudio | Microphone speech/noise analysis |
+
+### ☁️ Edge / Infrastructure
+
+| Technology | Role |
+|---|---|
+| Cloudflare Workers (TypeScript) | Supabase reverse proxy — bypasses ISP DNS blocking |
+| Wrangler | Cloudflare Worker deployment tooling |
 
 ---
 
-## Architecture
+## 🏗 Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                    Browser (React + Vite)                      │
-│  Exam UI · Monaco Editor · WebcamProctor · ProctoringSystem    │
-└───────────────────────┬────────────────────────────────────────┘
-                        │  REST + Socket.IO
-                        ▼
-┌────────────────────────────────────────────────────────────────┐
-│              Node.js / Express  (port 5000)                    │
-│  Auth · Classes · Exams · Submissions · Violations             │
-│  Question Bank · Proctoring Controller · Code Sandbox          │
-│                        │                                       │
-│          proctoringService.js  ←──  stdin/stdout pipe          │
-└───────────────────────┬────────────────────────────────────────┘
-                        │ spawn()
-                        ▼
-┌────────────────────────────────────────────────────────────────┐
-│         Python AI Engine  (frame_server.py)                    │
-│  FaceDetector · FaceMesh · GazeTracker · HeadPoseEstimator     │
-│  PhoneService (YOLOv8) · AudioDetector · RiskService (0–100)   │
-└────────────────────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌────────────────────────────────────────────────────────────────┐
-│                MySQL Database (Prisma ORM)                     │
-│  User · Class · Exam · StudentExamSession                      │
-│  Submission · Violation · QuestionBank                         │
-│  StudentQuestionAssignment                                     │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                   🌐 Browser (React + Vite)                     │
+│   Exam UI · Monaco Editor · WebcamProctor · ProctoringSystem    │
+└────────────────────────┬────────────────────────────────────────┘
+                         │  REST + Socket.IO
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│            ⚙️  Node.js / Express  (port 5000)                   │
+│   Auth · Classes · Exams · Submissions · Violations             │
+│   Question Bank · Proctoring Controller · Code Sandbox          │
+│                         │                                        │
+│          proctoringService.js  ◄──  stdin/stdout pipe           │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ spawn()
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│          🤖 Python AI Engine  (frame_server.py)                 │
+│   FaceDetector · FaceMesh · GazeTracker · HeadPoseEstimator     │
+│   PhoneService (YOLOv8) · AudioDetector · RiskService (0–100)   │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              🗄️  MySQL Database (Prisma ORM)                    │
+│   User · Class · Exam · StudentExamSession                      │
+│   Submission · Violation · QuestionBank                         │
+│   StudentQuestionAssignment                                      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 🔌 Node ↔ Python IPC Protocol
+
+The browser sends webcam frames to Node, which pipes them to the Python engine over OS stdin/stdout using line-delimited JSON — no HTTP overhead, no polling.
+
+```
+Node → Python stdin:
+  <base64-jpeg>\n              →  process frame, return JSON on stdout
+  VIOLATION:<json>\n           →  inject browser violation into risk engine
+  STOP\n + stdin.close()       →  graceful shutdown, write final report
+
+Python → Node stdout:
+  {"frameIndex":42,"riskScore":15.0,"riskLevel":"LOW","faceCount":1,
+   "gazeDirection":"CENTER","headDirection":"FORWARD",...}\n
 ```
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- Python ≥ 3.10
+- Node.js >= 18
+- Python >= 3.10
 - MySQL 8.0
 - Git
 
@@ -215,19 +309,19 @@ pip install mediapipe opencv-python numpy ultralytics pyaudio mammoth
 
 ### 5. Open the app
 
-Visit **http://localhost:5173**
+Visit **[http://localhost:5173](http://localhost:5173)**
 
-**Demo credentials (created by seed.js):**
+### 🔑 Demo Credentials
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | admin@olas.com | admin123 |
-| Faculty | faculty@olas.com | faculty123 |
-| Student | student@olas.com | student123 |
+| 🔴 Admin | admin@olas.com | admin123 |
+| 🟡 Faculty | faculty@olas.com | faculty123 |
+| 🟢 Student | student@olas.com | student123 |
 
 ---
 
-## Environment Variables
+## 🌍 Environment Variables
 
 ### `server/.env`
 
@@ -248,11 +342,11 @@ VITE_SOCKET_URL=http://localhost:5000
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 OLAS/
-├── client/                         # React frontend
+├── 🖥  client/                         # React frontend
 │   └── src/
 │       ├── components/
 │       │   ├── ProctoringSystem.jsx    # Browser guard + AI live feed panel
@@ -269,149 +363,120 @@ OLAS/
 │       │   ├── Classes.jsx / ClassDetail.jsx
 │       │   ├── Exams.jsx / ExamEdit.jsx
 │       │   └── Login.jsx
-│       ├── context/AuthContext.jsx
+│       ├── context/AuthContext.jsx     # JWT token + user state
 │       └── services/
 │           ├── api.js                  # Axios + all API functions
 │           └── socket.js              # Socket.IO singleton
 │
-├── server/                         # Node.js + Express backend
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── examController.js
-│   │   ├── classController.js
-│   │   ├── submissionController.js
-│   │   ├── violationController.js
-│   │   ├── userController.js
-│   │   └── questionBankController.js  # Question bank + random assignment
-│   ├── routes/
-│   │   ├── auth.js / exams.js / classes.js
-│   │   ├── submissions.js / violations.js
-│   │   └── questionBank.js
+├── ⚙️  server/                         # Node.js + Express backend
+│   ├── controllers/                   # 8 controller files (business logic)
+│   ├── routes/                        # 8 route files
 │   ├── proctoring/
 │   │   ├── proctoringController.js
 │   │   ├── proctoringRoutes.js
 │   │   └── proctoringService.js       # Python subprocess manager
 │   ├── middleware/auth.js             # JWT authenticate + authorize
-│   ├── utils/db.js                    # Prisma singleton
+│   ├── sandbox/executor.js            # Sandboxed multi-language code runner
 │   ├── sockets/index.js              # Socket.IO handlers
-│   ├── prisma/schema.prisma          # Database schema
+│   ├── prisma/schema.prisma          # Database schema (8 models)
+│   ├── utils/db.js                    # Prisma singleton
 │   └── server.js                     # Entry point
 │
-├── proctoring/                     # Python AI engine
-│   ├── frame_server.py             # Headless entry point (stdin/stdout)
-│   ├── face_detector.py            # MediaPipe BlazeFace
-│   ├── face_mesh_detector.py       # 478-landmark face mesh
-│   ├── gaze_tracker.py             # Iris ratio gaze detection
-│   ├── head_pose_estimator.py      # Yaw/pitch/roll estimation
-│   ├── violation_tracker.py        # Face count state machine
-│   ├── phone_detection/            # YOLOv8 phone detector
-│   │   ├── phone_detector.py
-│   │   ├── phone_service.py        # Background thread + queue
-│   │   └── phone_models.py
-│   ├── audio_detection/            # Microphone speech detector
-│   │   ├── audio_detector.py
-│   │   ├── audio_service.py        # Background thread
-│   │   └── audio_models.py
-│   ├── risk_engine/                # Scoring engine (0–100)
-│   │   ├── risk_models.py          # EventType, RiskLevel, dataclasses
-│   │   ├── risk_config.py          # Weights and thresholds
-│   │   ├── risk_calculator.py      # Pure math functions
-│   │   └── risk_service.py         # Stateful session manager
-│   ├── config.py                   # All tunable thresholds
+├── 🤖 proctoring/                     # Python AI engine
+│   ├── frame_server.py               # Headless entry point (stdin/stdout)
+│   ├── main.py                        # Interactive mode (webcam + OpenCV)
+│   ├── face_detector.py              # MediaPipe BlazeFace
+│   ├── face_mesh_detector.py         # 478-landmark face mesh
+│   ├── gaze_tracker.py               # Iris ratio gaze detection
+│   ├── head_pose_estimator.py        # Yaw/pitch/roll estimation
+│   ├── violation_tracker.py          # Face count state machine
+│   ├── phone_detection/              # YOLOv8 phone detector
+│   ├── audio_detection/              # Microphone speech detector
+│   ├── risk_engine/                  # Scoring engine (0–100)
+│   ├── config.py                     # All tunable thresholds
 │   └── requirements.txt
 │
-└── olas/                           # Cloudflare Worker
-    └── src/index.ts                # Supabase reverse proxy
+└── ☁️  olas/                           # Cloudflare Worker
+    └── src/index.ts                  # Supabase reverse proxy
 ```
 
 ---
 
-## AI Proctoring System
+## 🤖 AI Proctoring System
 
-The proctoring engine runs as a Python subprocess spawned by Node.js. The browser sends webcam frames to the Node server, which pipes them through to the Python engine over OS stdin/stdout using a line-delimited JSON protocol.
+The proctoring engine runs as a **Python subprocess spawned by Node.js**. The browser sends webcam frames to the Node server, which pipes them through to the Python engine over OS stdin/stdout — no network overhead, no polling.
 
-### What It Detects
+### 🔍 What It Detects
 
-| Detection | Method | Details |
+| Detection | Method | Trigger |
 |---|---|---|
-| **Face presence** | MediaPipe BlazeFace | Detects 0, 1, or multiple faces |
-| **Face landmarks** | MediaPipe FaceLandmarker | 478-point mesh per face |
-| **Gaze direction** | Iris ratio geometry | LEFT / RIGHT / UP / DOWN / CENTER |
-| **Head pose** | Transformation matrix | Yaw / pitch / roll in degrees |
-| **Phone usage** | YOLOv8n (COCO class 67) | Detects mobile phones in frame |
-| **Audio / speech** | PyAudio RMS analysis | Sustained speech or sudden noise spikes |
-| **Tab switching** | Browser focus events | Injected from frontend via violation API |
-| **Fullscreen exit** | Fullscreen change events | Injected from frontend via violation API |
-| **Copy / paste** | Keyboard event listeners | Injected from frontend via violation API |
-| **DevTools** | Window size heuristics | Injected from frontend via violation API |
+| 👤 **Face presence** | MediaPipe BlazeFace | 0 or multiple faces in frame |
+| 🫥 **Face landmarks** | MediaPipe FaceLandmarker | 478-point mesh per face |
+| 👀 **Gaze direction** | Iris ratio geometry | LEFT / RIGHT / UP / DOWN / CENTER |
+| 🧭 **Head pose** | Transformation matrix | Yaw / pitch / roll in degrees |
+| 📱 **Phone usage** | YOLOv8n (COCO class 67) | Mobile phone detected in frame |
+| 🎙 **Audio / speech** | PyAudio RMS analysis | Sustained speech or sudden noise spikes |
+| 🔁 **Tab switching** | Browser focus events | Injected from frontend via violation API |
+| 🖥 **Fullscreen exit** | Fullscreen change events | Injected from frontend via violation API |
+| 📋 **Copy / paste** | Keyboard event listeners | Injected from frontend via violation API |
+| 🛠 **DevTools** | Window size heuristics | Injected from frontend via violation API |
 
-### Protocol
-
-```
-Node → Python stdin:
-  <base64-jpeg>\n              → process frame, return JSON on stdout
-  VIOLATION:<json>\n           → inject browser violation into risk engine
-  STOP\n + stdin.close()       → graceful shutdown, write final report
-
-Python → Node stdout:
-  {"frameIndex":42,"riskScore":15.0,"riskLevel":"LOW","faceCount":1,
-   "gazeDirection":"CENTER","headDirection":"FORWARD",...}\n
-```
-
-### Risk Score Weights
+### 📊 Risk Score Weights
 
 | Event | Points Added |
 |---|---|
-| Phone detected | +50 |
-| Multiple faces in frame | +30 |
-| No face detected | +15 |
-| Head turned away | +8 |
-| Looking away (gaze) | +5 |
-| Speech detected (audio) | +10 |
-| Noise spike | +20 |
-| Tab switch / fullscreen exit | +10 |
+| 📱 Phone detected | +50 |
+| 👥 Multiple faces in frame | +30 |
+| 🔊 Noise spike | +20 |
+| 🚫 No face detected | +15 |
+| 🗣 Speech detected | +10 |
+| 🔁 Tab switch / fullscreen exit | +10 |
+| 🧭 Head turned away | +8 |
+| 👀 Looking away (gaze) | +5 |
 
-### Risk Levels
+### 🚦 Risk Levels
 
 | Score | Level | Colour |
 |---|---|---|
-| 0–20 | SAFE | Green |
-| 21–40 | LOW | Light green |
-| 41–60 | MEDIUM | Yellow |
-| 61–80 | HIGH | Orange |
-| 81–100 | CRITICAL | Red |
+| 0 – 20 | 🟢 SAFE | Green |
+| 21 – 40 | 🟩 LOW | Light green |
+| 41 – 60 | 🟡 MEDIUM | Yellow |
+| 61 – 80 | 🟠 HIGH | Orange |
+| 81 – 100 | 🔴 CRITICAL | Red |
 
 ---
 
-## Randomised Question Assignment
+## 🎲 Randomised Question Assignment
 
-Faculty can upload a question bank (`.txt`, `.doc`, `.docx`) and enable random assignment when creating an exam. This prevents students from sharing answers because each student gets a different question.
+Faculty upload a question bank and enable random assignment. Each student gets a **different question**, making answer-sharing useless.
 
 ### Assignment Modes
 
 | Mode | Behaviour |
 |---|---|
-| **Unique Assignment** | No question repeats until all questions are exhausted |
-| **Allow Repetition** | Multiple students can receive the same question (useful when students > questions) |
+| **Unique Assignment** | No question repeats until all are exhausted |
+| **Allow Repetition** | Multiple students can get the same question (useful when students > questions) |
 
 ### Reproducible Seed
 
-Setting a **Random Seed** (e.g. `42`) guarantees the same distribution every time — useful for re-evaluation, appeals, and audit trails.
+Setting a **Random Seed** (e.g. `42`) with a Mulberry32 PRNG + Fisher-Yates shuffle guarantees the **same distribution every run** — perfect for re-evaluation, appeals, and audit trails.
 
 ### Workflow
 
-1. Create exam → Upload `.txt`/`.doc`/`.docx` or add questions manually
-2. Toggle **🎲 Random Question Assignment**
-3. Set questions per student and choose mode
-4. Click **👁 Preview Allocation** — see exactly which student gets which question before saving
-5. Click **Create Exam & Assign Questions** — assignments written to DB atomically
+```
+1. Create exam → Upload .txt / .doc / .docx or add questions manually
+2. Toggle 🎲 Random Question Assignment
+3. Set questions per student and choose Unique or Repetition mode
+4. Click 👁 Preview Allocation → see the exact student→question map
+5. Click Create Exam & Assign Questions → written to DB atomically
 6. Students see only their assigned question with a 🔒 badge
+```
 
 ---
 
-## Audio Proctoring
+## 🎙 Audio Proctoring
 
-The audio module runs as a background thread inside the Python engine, analysing the student's microphone in real time.
+The audio module runs as a **background thread** inside the Python engine, analysing the student's microphone in real time.
 
 | Setting | Default | Description |
 |---|---|---|
@@ -425,66 +490,72 @@ Violations are fed directly into the risk engine and appear on the faculty monit
 
 ---
 
-## API Reference
+## 📡 API Reference
 
-### Auth
+### 🔐 Auth
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/auth/register` | Register user |
-| POST | `/api/auth/login` | Login, returns JWT |
-| GET | `/api/auth/profile` | Get current user |
+| `POST` | `/api/auth/register` | Register user |
+| `POST` | `/api/auth/login` | Login, returns JWT |
+| `GET` | `/api/auth/profile` | Get current user |
 
-### Exams
+### 📋 Exams
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/exams` | List exams (role-filtered) |
-| POST | `/api/exams` | Create exam |
-| PUT | `/api/exams/:id` | Edit exam |
-| DELETE | `/api/exams/:id` | Delete exam |
-| POST | `/api/exams/:id/start` | Start exam session |
-| POST | `/api/exams/:id/submit` | Submit exam |
-| GET | `/api/exams/:id/sessions` | All student sessions (faculty) |
+| `GET` | `/api/exams` | List exams (role-filtered) |
+| `POST` | `/api/exams` | Create exam |
+| `PUT` | `/api/exams/:id` | Edit exam |
+| `DELETE` | `/api/exams/:id` | Delete exam |
+| `POST` | `/api/exams/:id/start` | Start exam session |
+| `POST` | `/api/exams/:id/submit` | Submit exam |
+| `GET` | `/api/exams/:id/sessions` | All student sessions (faculty) |
 
-### Submissions
+### 📤 Submissions
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/submissions` | Submit code for a question |
-| GET | `/api/submissions/exam/:id` | Get all submissions for an exam |
-| POST | `/api/submissions/:id/grade` | Grade a submission |
+| `POST` | `/api/submissions` | Submit code for a question |
+| `GET` | `/api/submissions/exam/:id` | Get all submissions for an exam |
+| `POST` | `/api/submissions/:id/grade` | Grade a submission |
 
-### Violations
+### 🚨 Violations
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/violations` | Record a violation |
-| GET | `/api/violations/session/:id` | Get violations for a session |
-| POST | `/api/violations/unblock` | Unblock a student |
+| `POST` | `/api/violations` | Record a violation |
+| `GET` | `/api/violations/session/:id` | Get violations for a session |
+| `POST` | `/api/violations/unblock` | Unblock a student |
 
-### Question Bank
+### 📚 Question Bank
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/question-bank/upload` | Parse uploaded file |
-| POST | `/api/question-bank/save` | Save question bank |
-| GET | `/api/question-bank/:examId` | Get bank for exam |
-| POST | `/api/question-bank/:examId/assign` | Assign questions randomly |
-| GET | `/api/question-bank/:examId/assignments` | Faculty assignment view |
-| GET | `/api/question-bank/:examId/my-question` | Student's assigned question |
+| `POST` | `/api/question-bank/upload` | Parse uploaded file |
+| `POST` | `/api/question-bank/save` | Save question bank |
+| `GET` | `/api/question-bank/:examId` | Get bank for exam |
+| `POST` | `/api/question-bank/:examId/assign` | Assign questions randomly |
+| `GET` | `/api/question-bank/:examId/assignments` | Faculty assignment view |
+| `GET` | `/api/question-bank/:examId/my-question` | Student's assigned question |
 
-### Proctoring
+### 🤖 Proctoring
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/proctoring/start` | Spawn Python engine |
-| POST | `/api/proctoring/frame` | Submit webcam frame |
-| POST | `/api/proctoring/violation` | Record browser violation |
-| GET | `/api/proctoring/status` | Get live risk data |
-| GET | `/api/proctoring/report/:sessionId` | Final session report |
-| POST | `/api/proctoring/stop` | Stop engine, save report |
+| `POST` | `/api/proctoring/start` | Spawn Python engine |
+| `POST` | `/api/proctoring/frame` | Submit webcam frame |
+| `POST` | `/api/proctoring/violation` | Record browser violation |
+| `GET` | `/api/proctoring/status` | Get live risk data |
+| `GET` | `/api/proctoring/report/:sessionId` | Final session report |
+| `POST` | `/api/proctoring/stop` | Stop engine, save report |
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the **MIT License** — use it, modify it, deploy it.
 
 ---
 
-<p align="center">Built with ❤️ for academic integrity</p>
+<div align="center">
+
+Made with ❤️ for academic integrity
+
+**[⬆ back to top](#-olas)**
+
+</div>
