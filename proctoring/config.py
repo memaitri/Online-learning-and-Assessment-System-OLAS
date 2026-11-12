@@ -175,13 +175,17 @@ DRAW_HEAD_ANGLES: bool = True
 PHONE_MODEL_PATH: str = "yolov8n.pt"
 
 # Minimum YOLO confidence score to accept a detection.
-PHONE_CONFIDENCE_THRESHOLD: float = 0.45
+# Lowered from 0.45 → 0.25 to catch phones at typical webcam distances,
+# side-profile angles, and partial occlusions. YOLOv8n tends to score
+# phones in the 0.25–0.40 range under real-world lighting conditions.
+PHONE_CONFIDENCE_THRESHOLD: float = 0.25
 
 # Run YOLO inference every N frames.
 # 1 = every frame (highest accuracy, highest CPU cost).
-# 5 = every 5th frame (good balance at 30 fps, default).
+# 3 = every 3rd frame (~10 checks/sec at 30fps) — better for phone detection.
+# 5 = every 5th frame (good balance at 30 fps, old default).
 # Skipped frames reuse the last result (is_stale=True).
-PHONE_FRAME_SKIP: int = 5
+PHONE_FRAME_SKIP: int = 3
 
 # When running in headless frame-server mode (frame_server.py), the browser
 # sends one frame every 2 seconds — effectively 0.5 fps.  Running YOLO on

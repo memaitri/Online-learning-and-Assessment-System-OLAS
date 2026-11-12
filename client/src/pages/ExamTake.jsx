@@ -156,42 +156,57 @@ const ExamTake = () => {
   // ─────────────────────────────────────────────────────────────────────
   const startProctoring = useCallback(async (examId) => {
     if (proctoringStarted) return;
+    setProctoringStarted(true);
+
+    // Check if proctoring is already running and ready (e.g. page reload mid-exam)
+    try {
+      const existingStatus = await proctoringAPI.status(examId);
+      if (existingStatus.data?.proctoring?.ready) {
+        console.log('[ExamTake] Proctoring already ready — skipping spawn');
+        setProctoringReady(true);
+        return;
+      }
+    } catch (_) { /* ignore — will try to start below */ }
+
     try {
       console.log('[ExamTake] Starting AI proctoring for exam:', examId);
-      const res = await proctoringAPI.start(examId);
-      console.log('[ExamTake] Proctoring start response:', res.data);
-      setProctoringStarted(true);
-
-      // Poll until Python reports "All detectors ready" via the status endpoint,
-      // then set proctoringReady=true so WebcamProctor begins sending frames.
-      console.log('[ExamTake] Waiting for Python detectors to initialise…');
-      let attempts = 0;
-      const readyPoll = setInterval(async () => {
-        attempts++;
-        try {
-          const statusRes = await proctoringAPI.status(examId);
-          const ready = statusRes.data?.proctoring?.ready;
-          console.log(`[ExamTake] Readiness poll #${attempts}: ready=${ready}`);
-          if (ready) {
-            clearInterval(readyPoll);
-            setProctoringReady(true);
-            console.log('[ExamTake] Python detectors ready ✓ — frame capture will start');
-          }
-          if (attempts >= 30) {
-            // Timeout after ~60s — start anyway so exam is not blocked
-            clearInterval(readyPoll);
-            setProctoringReady(true);
-            console.warn('[ExamTake] Readiness timeout — starting frame capture anyway');
-          }
-        } catch (e) {
-          console.warn('[ExamTake] Readiness poll error:', e.message);
-        }
-      }, 2000);
-
+      await proctoringAPI.start(examId);
+      console.log('[ExamTake] Proctoring start OK');
     } catch (err) {
-      console.warn('[ExamTake] Could not start AI proctoring:', err.response?.data || err.message);
-      // Still allow exam — browser proctoring always works
+      const status = err.response?.status;
+      // 409 = already running — that's fine, still poll for ready
+      if (status !== 409) {
+        console.warn('[ExamTake] Could not start AI proctoring:', err.response?.data || err.message);
+        // Still allow exam — browser proctoring always works
+      } else {
+        console.log('[ExamTake] Proctoring already running (409) — polling for ready state');
+      }
     }
+
+    // Poll until Python reports ready, then set proctoringReady=true
+    console.log('[ExamTake] Waiting for Python detectors to initialise…');
+    let attempts = 0;
+    const readyPoll = setInterval(async () => {
+      attempts++;
+      try {
+        const statusRes = await proctoringAPI.status(examId);
+        const ready = statusRes.data?.proctoring?.ready;
+        console.log(`[ExamTake] Readiness poll #${attempts}: ready=${ready}`);
+        if (ready) {
+          clearInterval(readyPoll);
+          setProctoringReady(true);
+          console.log('[ExamTake] Python detectors ready ✓ — frame capture will start');
+        }
+        if (attempts >= 30) {
+          // Timeout after ~60s — start anyway so exam is not blocked
+          clearInterval(readyPoll);
+          setProctoringReady(true);
+          console.warn('[ExamTake] Readiness timeout — starting frame capture anyway');
+        }
+      } catch (e) {
+        console.warn('[ExamTake] Readiness poll error:', e.message);
+      }
+    }, 2000);
   }, [proctoringStarted]);
 
   // ─────────────────────────────────────────────────────────────────────
