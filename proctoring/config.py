@@ -175,13 +175,17 @@ DRAW_HEAD_ANGLES: bool = True
 PHONE_MODEL_PATH: str = "yolov8n.pt"
 
 # Minimum YOLO confidence score to accept a detection.
-PHONE_CONFIDENCE_THRESHOLD: float = 0.45
+# Lowered from 0.45 → 0.25 to catch phones at typical webcam distances,
+# side-profile angles, and partial occlusions. YOLOv8n tends to score
+# phones in the 0.25–0.40 range under real-world lighting conditions.
+PHONE_CONFIDENCE_THRESHOLD: float = 0.25
 
 # Run YOLO inference every N frames.
 # 1 = every frame (highest accuracy, highest CPU cost).
-# 5 = every 5th frame (good balance at 30 fps, default).
+# 3 = every 3rd frame (~10 checks/sec at 30fps) — better for phone detection.
+# 5 = every 5th frame (good balance at 30 fps, old default).
 # Skipped frames reuse the last result (is_stale=True).
-PHONE_FRAME_SKIP: int = 5
+PHONE_FRAME_SKIP: int = 3
 
 # When running in headless frame-server mode (frame_server.py), the browser
 # sends one frame every 2 seconds — effectively 0.5 fps.  Running YOLO on
@@ -213,6 +217,47 @@ RISK_COLOR_LOW:      tuple = (0, 200, 100)     # light green
 RISK_COLOR_MEDIUM:   tuple = (0, 200, 220)     # yellow (BGR)
 RISK_COLOR_HIGH:     tuple = (0, 100, 255)     # orange
 RISK_COLOR_CRITICAL: tuple = (0, 0, 255)       # red
+
+# -------------------------------------------------------------------
+# Module 8 — Audio Proctoring
+# -------------------------------------------------------------------
+
+# PyAudio input device index.
+# None = use the system default microphone.
+# Set to an integer (0, 1, 2 …) to select a specific device.
+# Run `python -c "import pyaudio; p=pyaudio.PyAudio(); [print(i, p.get_device_info_by_index(i)['name']) for i in range(p.get_device_count())]"`
+# to list available devices.
+AUDIO_DEVICE_INDEX: int = None        # type: ignore[assignment]
+
+# Microphone sample rate (Hz).  16 000 Hz is standard for speech detection.
+AUDIO_SAMPLE_RATE: int = 16_000
+
+# Number of PCM frames per analysis chunk.
+# At 16 000 Hz, 1 024 frames ≈ 64 ms per analysis window.
+AUDIO_CHUNK_SIZE: int = 1_024
+
+# RMS amplitude threshold for classifying a chunk as "speech".
+# 16-bit PCM range is 0 – 32 768.
+# • 300  → very sensitive (picks up quiet whispering in a silent room)
+# • 500  → recommended default (normal speech clearly detected)
+# • 1000 → only loud speech / shouting triggers a violation
+# Tune this in your room by checking the dB readout on the overlay.
+AUDIO_RMS_THRESHOLD: float = 500.0
+
+# RMS threshold for an INSTANT noise-spike violation (no timeout).
+# Set higher than AUDIO_RMS_THRESHOLD to distinguish a sudden shout/slam
+# from sustained quiet speech.
+AUDIO_SPIKE_THRESHOLD: float = 4_000.0
+
+# Seconds of continuous speech above AUDIO_RMS_THRESHOLD before a
+# TALKING violation fires.  Prevents false positives from a single cough,
+# chair scrape, or short acknowledgement.
+AUDIO_SPEECH_TIMEOUT: float = 3.0
+
+# BGR colours for the audio level bar and alert indicators.
+AUDIO_COLOR_NORMAL:  tuple = (0, 200,   0)    # green  — quiet
+AUDIO_COLOR_SPEECH:  tuple = (0, 200, 220)    # yellow — above RMS threshold
+AUDIO_COLOR_VIOLATION: tuple = (0,   0, 255)  # red    — violation active
 
 # -------------------------------------------------------------------
 # Logging

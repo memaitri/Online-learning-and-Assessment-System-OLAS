@@ -88,13 +88,29 @@ export function startSession(dbSessionId) {
   });
 
   // ── Log Python stderr to Node console ────────────────────────────────
+  let stderrBuffer = '';   // accumulate partial lines on Windows
   pyProcess.stderr.on('data', (data) => {
     const msg = data.toString();
     process.stderr.write(`[Proctoring:STDERR:${dbSessionId.slice(0,6)}] ${msg}`);
+
+    // Accumulate into buffer and check across chunk boundaries
+    stderrBuffer += msg;
+
     // Mark as ready once detectors are initialised
-    if (msg.includes('All detectors ready')) {
+    if (!session.ready && stderrBuffer.includes('All detectors ready')) {
       session.ready = true;
       process.stdout.write(`[Proctoring] Session ${dbSessionId.slice(0,6)} READY — frames will now be processed\n`);
+    }
+
+    // Also mark ready if we see the read_loop started message (belt-and-suspenders)
+    if (!session.ready && stderrBuffer.includes('_read_loop started')) {
+      session.ready = true;
+      process.stdout.write(`[Proctoring] Session ${dbSessionId.slice(0,6)} READY (read_loop) — frames will now be processed\n`);
+    }
+
+    // Keep buffer from growing unbounded — trim once we're ready
+    if (session.ready && stderrBuffer.length > 4096) {
+      stderrBuffer = stderrBuffer.slice(-1024);
     }
   });
 
@@ -246,6 +262,7 @@ export function getStatus(dbSessionId) {
       noFace:          0,
       lookingAway:     0,
       headTurns:       0,
+      audioViolations: 0,
       status:          session.status,
     },
   };
