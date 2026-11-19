@@ -22,7 +22,7 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 export const submitBrowserViolation = async (req, res) => {
   try {
-    const { examId, type } = req.body;
+    const { examId, type, metadata } = req.body;
     const studentId        = req.user.id;
 
     if (!examId || !type) {
@@ -53,6 +53,8 @@ export const submitBrowserViolation = async (req, res) => {
       'devtools_open':      'LOOKING_AWAY',
       'page_refresh':       'LOOKING_AWAY',
       'network_disconnect': null,
+      'audio_speech_detected': 'SPEECH_DETECTED',
+      'audio_noise_spike':    'NOISE_SPIKE',
     };
 
     const eventType = EVENT_MAP[type] ?? null;
@@ -61,7 +63,14 @@ export const submitBrowserViolation = async (req, res) => {
     if (eventType) {
       // Dynamically import to avoid circular dep issues at module load time
       const { submitViolationEvent } = await import('./proctoringService.js');
-      const result = submitViolationEvent(dbSession.id, eventType, { source: 'browser', type });
+      const eventMetadata = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? metadata
+        : {};
+      const result = submitViolationEvent(dbSession.id, eventType, {
+        ...eventMetadata,
+        source: 'browser',
+        type,
+      });
       latestResult = result ?? null;
     }
 

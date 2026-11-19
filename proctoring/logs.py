@@ -213,6 +213,32 @@ class ViolationLogger:
         )
         self._logger.info(message)
 
+    def log_audio_violation(
+        self,
+        alert:       str,
+        rms_level:   float,
+        seconds_loud: float,
+    ) -> None:
+        """
+        Append one audio violation event to the log file.
+
+        Parameters
+        ----------
+        alert       : str   — AudioAlert value (e.g. "TALKING", "NOISE_SPIKE").
+        rms_level   : float — RMS amplitude at time of violation.
+        seconds_loud: float — Duration of sustained speech (0 for spikes).
+        """
+        if self._logger is None:
+            return
+
+        message = (
+            f"VIOLATION  "
+            f"{alert:<20s}  "
+            f"rms={rms_level:.0f}  "
+            f"duration={seconds_loud:.2f}s"
+        )
+        self._logger.info(message)
+
     # ------------------------------------------------------------------
     # Context-manager support
     # ------------------------------------------------------------------

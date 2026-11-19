@@ -16,6 +16,7 @@ from risk_engine.risk_config import (
     THRESHOLD_SAFE, THRESHOLD_LOW, THRESHOLD_MEDIUM, THRESHOLD_HIGH,
     WEIGHT_NO_FACE, WEIGHT_MULTIPLE_FACES, WEIGHT_LOOKING_AWAY,
     WEIGHT_HEAD_TURNED_AWAY, WEIGHT_PHONE_DETECTED,
+    WEIGHT_SPEECH_DETECTED, WEIGHT_NOISE_SPIKE,
     WEIGHT_CHEAT_SHEET, WEIGHT_BOOK_DETECTED, WEIGHT_CALCULATOR,
     SCORE_DECAY_PER_MINUTE,
 )
@@ -35,6 +36,8 @@ DEFAULT_WEIGHTS: Dict[EventType, float] = {
     EventType.LOOKING_AWAY:     WEIGHT_LOOKING_AWAY,
     EventType.HEAD_TURNED_AWAY: WEIGHT_HEAD_TURNED_AWAY,
     EventType.PHONE_DETECTED:   WEIGHT_PHONE_DETECTED,
+    EventType.SPEECH_DETECTED:  WEIGHT_SPEECH_DETECTED,
+    EventType.NOISE_SPIKE:      WEIGHT_NOISE_SPIKE,
     EventType.CHEAT_SHEET:      WEIGHT_CHEAT_SHEET,
     EventType.BOOK_DETECTED:    WEIGHT_BOOK_DETECTED,
     EventType.CALCULATOR:       WEIGHT_CALCULATOR,
@@ -273,6 +276,14 @@ def _generate_summary(
     if counts.get(EventType.HEAD_TURNED_AWAY.value, 0) > 0:
         highlights.append(
             f"Head turned away: {counts[EventType.HEAD_TURNED_AWAY.value]} episode(s)."
+        )
+    if counts.get(EventType.SPEECH_DETECTED.value, 0) > 0:
+        highlights.append(
+            f"Sustained speech detected: {counts[EventType.SPEECH_DETECTED.value]} episode(s)."
+        )
+    if counts.get(EventType.NOISE_SPIKE.value, 0) > 0:
+        highlights.append(
+            f"Sudden noise spike: {counts[EventType.NOISE_SPIKE.value]} occurrence(s)."
         )
 
     if highlights:

@@ -29,6 +29,28 @@ const RISK_LOG_FILE  = path.join(PROCTORING_DIR, 'logs', 'risk_log.txt');
 // Map: dbSessionId → SessionState
 const activeSessions = new Map();
 
+function createStartingResult(sessionId) {
+  return {
+    sessionId,
+    frameIndex: 0,
+    faceCount: -1,
+    riskScore: 0,
+    riskLevel: 'SAFE',
+    totalViolations: 0,
+    phoneDetections: 0,
+    multipleFaces: 0,
+    noFace: 0,
+    lookingAway: 0,
+    headTurns: 0,
+    audioViolations: 0,
+    speechDetected: 0,
+    noiseSpikes: 0,
+    sessionSeconds: 0,
+    lastEvent: '—',
+    status: 'starting',
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // startSession(dbSessionId)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +89,7 @@ export function startSession(dbSessionId) {
     startedAt:    new Date(),
     status:       'running',
     dbSessionId,
-    latestResult: null,    // last JSON result line from Python stdout
+    latestResult: createStartingResult(dbSessionId),
     ready:        false,   // true once Python prints its ready message
   };
   activeSessions.set(dbSessionId, session);

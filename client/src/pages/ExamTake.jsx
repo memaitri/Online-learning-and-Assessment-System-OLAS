@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import { examAPI, codeAPI, submissionAPI, proctoringAPI, questionBankAPI } from '../services/api';
+import { examAPI, codeAPI, submissionAPI, violationAPI, proctoringAPI, questionBankAPI } from '../services/api';
 import { initSocket, disconnectSocket } from '../services/socket';
 import ProctoringSystem from '../components/ProctoringSystem';
 import WebcamProctor from '../components/WebcamProctor';
+import AudioProctor from '../components/AudioProctor';
+import { selectPhysicalMicrophone } from '../components/selectMicrophone';
 import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +64,12 @@ const ExamTake = () => {
   const [camPermission, setCamPermission] = useState('idle');
   const [camStream, setCamStream]         = useState(null); // state so WebcamProctor prop updates
   const camStreamRef = useRef(null); // ref copy for cleanup access
+  const [micPermission, setMicPermission] = useState('idle');
+  const [micError, setMicError] = useState('');
+  const [micStream, setMicStream] = useState(null);
+  const micStreamRef = useRef(null);
+  const [audioContext, setAudioContext] = useState(null);
+  const audioContextRef = useRef(null);
 
   // ── Handle real-time result from WebcamProctor ───────────────────────
   const handleFrameResult = useCallback((result) => {
@@ -77,6 +85,8 @@ const ExamTake = () => {
       lookingAway:     result.lookingAway     ?? 0,
       headTurns:       result.headTurns       ?? 0,
       audioViolations: result.audioViolations ?? 0,
+      speechDetected:  result.speechDetected  ?? 0,
+      noiseSpikes:     result.noiseSpikes     ?? 0,
       gazeDirection:   result.gazeDirection   ?? 'UNKNOWN',
       headDirection:   result.headDirection   ?? 'UNKNOWN',
       faceCount:       result.faceCount       ?? 0,
@@ -90,6 +100,21 @@ const ExamTake = () => {
   const pollInterval        = useRef(null);       // 5-second risk-status poll
   const hasSubmitted        = useRef(false);
   const proctoringSessionId = useRef(null);       // DB session ID used for proctoring
+  const stopMediaCapture = useCallback((updateState = true) => {
+    const streams = new Set([camStreamRef.current, micStreamRef.current].filter(Boolean));
+    streams.forEach(stream => stream.getTracks().forEach(track => track.stop()));
+    camStreamRef.current = null;
+    micStreamRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(error => console.error('[AudioProctor] Cleanup failed:', error));
+    }
+    audioContextRef.current = null;
+    if (updateState) {
+      setCamStream(null);
+      setMicStream(null);
+      setAudioContext(null);
+    }
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────
   // Step 1-4: Request camera → verify stream → enter fullscreen
@@ -98,39 +123,91 @@ const ExamTake = () => {
   // watches session + fullscreenReady — nothing there is changed.
   // ─────────────────────────────────────────────────────────────────────
   const handleStartButton = async () => {
-    // ── Step 1: Request camera permission ──────────────────────────────
-    console.log('[Camera] Permission requested');
+    // ── Step 1: Request camera and microphone permission ────────────────
+    console.log('[Media] Camera and microphone permissions requested');
     setCamPermission('requesting');
+    setMicPermission('requesting');
+    setMicError('');
+    let context;
+
+    try {
+      const AudioContextConstructor = window.AudioContext;
+      if (!AudioContextConstructor) {
+        throw new Error('Web Audio API is not supported by this browser.');
+      }
+      context = new AudioContextConstructor();
+      await context.resume();
+    } catch (err) {
+      if (context && context.state !== 'closed') context.close();
+      setCamPermission('idle');
+      setMicPermission('error');
+      setMicError(err.message);
+      console.error('[Microphone] Web Audio API unavailable:', err.name, err.message);
+      return;
+    }
+
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-        audio: false,
+        audio: true,
       });
     } catch (err) {
+      if (context.state !== 'closed') context.close();
       const denied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
-      console.error('[Camera] Permission denied:', err.name, err.message);
+      console.error('[Media] Camera/microphone permission failed:', err.name, err.message);
       setCamPermission(denied ? 'denied' : 'error');
+      setMicPermission(denied ? 'denied' : 'error');
+      setMicError(err.message);
       return; // block exam start
     }
 
-    // ── Step 2: Verify stream has an active video track ─────────────────
-    const tracks = stream.getVideoTracks();
-    if (!tracks.length || tracks[0].readyState !== 'live') {
-      console.error('[Camera] Stream has no live video track');
+    // ── Step 2: Verify the stream has active video and audio tracks ─────
+    const videoTracks = stream.getVideoTracks();
+    const audioTracks = stream.getAudioTracks();
+    if (!videoTracks.some(track => track.readyState === 'live')
+        || !audioTracks.some(track => track.readyState === 'live')) {
+      console.error('[Media] Stream is missing a live camera or microphone track');
       stream.getTracks().forEach(t => t.stop());
+      if (context.state !== 'closed') context.close();
       setCamPermission('error');
+      setMicPermission('error');
+      setMicError('The browser did not provide both a live camera and microphone track.');
       return;
     }
-    console.log('[Camera] Permission granted');
-    console.log('[Camera] Stream active —', tracks[0].label);
-    setCamPermission('granted');
 
-    // ── Step 3: Store stream so WebcamProctor can reuse it ─────────────
-    // Stored in both state (triggers re-render so the prop is current)
-    // and ref (for cleanup access without a stale closure).
-    camStreamRef.current = stream;
-    setCamStream(stream);
+    let audioStream;
+    try {
+      audioStream = await selectPhysicalMicrophone(navigator.mediaDevices, audioTracks[0]);
+      if (audioStream) {
+        audioTracks.forEach(track => track.stop());
+      } else {
+        audioStream = new MediaStream(audioTracks);
+      }
+    } catch (err) {
+      stream.getTracks().forEach(track => track.stop());
+      if (context.state !== 'closed') context.close();
+      setCamPermission('idle');
+      setMicPermission('error');
+      setMicError(err.message);
+      console.error('[Microphone] Could not select a working input:', err.message);
+      return;
+    }
+
+    const cameraStream = new MediaStream(videoTracks);
+    console.log('[Media] Camera active; microphone:', audioStream.getAudioTracks()[0].label);
+    setCamPermission('granted');
+    setMicPermission('granted');
+
+    // Keep browser camera and microphone streams separate for their consumers.
+    micStreamRef.current = audioStream;
+    audioContextRef.current = context;
+    setMicStream(audioStream);
+    setAudioContext(context);
+
+    // ── Step 3: Store the camera stream for WebcamProctor ──────────────
+    camStreamRef.current = cameraStream;
+    setCamStream(cameraStream);
 
     // ── Step 4: Enter fullscreen ────────────────────────────────────────
     // Steps 5 (start proctoring) and 6 (begin frame uploads) are triggered
@@ -144,10 +221,10 @@ const ExamTake = () => {
     } catch {
       toast.error('Fullscreen required. Please try again.');
       // Release the stream if fullscreen fails so user can retry cleanly
-      stream.getTracks().forEach(t => t.stop());
-      camStreamRef.current = null;
-      setCamStream(null);
+      stopMediaCapture();
       setCamPermission('idle');
+      setMicPermission('idle');
+      setMicError('');
     }
   };
 
@@ -287,8 +364,9 @@ const ExamTake = () => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
+      stopMediaCapture(false);
     };
-  }, [id]);
+  }, [id, stopMediaCapture]);
 
   // ─────────────────────────────────────────────────────────────────────
   // Timer
@@ -551,6 +629,7 @@ const ExamTake = () => {
         });
       }
       await examAPI.submit(id);   // this also stops proctoring server-side
+      stopMediaCapture();
       await stopProctoringAndReport(id, proctoringSessionId.current);
       toast.success('Exam submitted');
       setTimeout(() => navigate('/exams'), 3000);
@@ -572,6 +651,7 @@ const ExamTake = () => {
     try {
       if (code.trim()) await handleSaveSubmission();
       await examAPI.submit(id);   // stops Python proctoring server-side
+      stopMediaCapture();
       await stopProctoringAndReport(id, proctoringSessionId.current);
       toast.success('Exam submitted successfully');
       setTimeout(() => navigate('/exams'), 3000);
@@ -588,8 +668,38 @@ const ExamTake = () => {
   const handleViolation = (count) => {
     if (count >= exam?.maxViolations) handleAutoSubmit('Excessive violations');
   };
+  const handleAudioViolation = async (type, metadata) => {
+    if (hasSubmitted.current || !session?.id) return;
+
+    const description = type === 'audio_noise_spike'
+      ? 'Sudden loud noise detected by microphone'
+      : 'Sustained speech detected by microphone';
+    const severity = type === 'audio_noise_spike' ? 'high' : 'medium';
+
+    try {
+      await proctoringAPI.violation(id, type, metadata);
+    } catch (error) {
+      console.error('[AudioProctor] Could not add event to the risk score:', error);
+    }
+
+    try {
+      const response = await violationAPI.create({
+        sessionId: session.id,
+        type,
+        description,
+        severity,
+      });
+      toast.error(`⚠️ ${description}`);
+      if (response.data.blocked) handleBlock();
+      else handleViolation(response.data.violationCount);
+    } catch (error) {
+      console.error('[AudioProctor] Could not record microphone event:', error);
+      toast.error('Audio event could not be recorded');
+    }
+  };
   const handleBlock = () => {
     setIsBlocked(true);
+    stopMediaCapture();
     handleAutoSubmit('Blocked due to violations');
   };
 
@@ -619,15 +729,18 @@ const ExamTake = () => {
         <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
           <div className="text-center max-w-md px-6">
             <div className="text-6xl mb-6">📷</div>
-            <h1 className="text-2xl font-bold mb-3 text-red-400">Camera Access Required</h1>
+            <h1 className="text-2xl font-bold mb-3 text-red-400">Camera and Microphone Access Required</h1>
             <p className="text-gray-300 mb-2">
-              Camera permission was denied. This examination requires webcam access for AI proctoring.
+              This examination requires webcam and microphone access for AI proctoring.
             </p>
             <p className="text-gray-400 text-sm mb-8">
-              To fix this: click the camera icon in your browser's address bar and allow access, then retry.
+              Allow both devices from your browser's address bar, then retry.
             </p>
             <button
-              onClick={() => setCamPermission('idle')}
+              onClick={() => {
+                setCamPermission('idle');
+                setMicPermission('idle');
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
             >
               Retry
@@ -643,12 +756,15 @@ const ExamTake = () => {
         <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
           <div className="text-center max-w-md px-6">
             <div className="text-6xl mb-6">⚠️</div>
-            <h1 className="text-2xl font-bold mb-3 text-yellow-400">Camera Unavailable</h1>
+            <h1 className="text-2xl font-bold mb-3 text-yellow-400">Camera or Microphone Unavailable</h1>
             <p className="text-gray-300 mb-2">
-              Could not access your webcam. Make sure no other application is using it and try again.
+              Could not access both required devices. Check that a camera and microphone are connected and available.
             </p>
             <button
-              onClick={() => setCamPermission('idle')}
+              onClick={() => {
+                setCamPermission('idle');
+                setMicPermission('idle');
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg mt-6"
             >
               Retry
@@ -658,17 +774,45 @@ const ExamTake = () => {
       );
     }
 
+    if (micPermission === 'denied' || micPermission === 'error') {
+      return (
+        <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+          <div className="text-center max-w-md px-6">
+            <div className="text-6xl mb-6">🎙️</div>
+            <h1 className="text-2xl font-bold mb-3 text-red-400">Microphone Access Required</h1>
+            <p className="text-gray-300 mb-2">
+              This exam requires microphone access for speech and noise monitoring.
+            </p>
+            <p className="text-gray-400 text-sm mb-8">
+              {micError || 'Audio is analyzed in your browser; raw microphone audio is not uploaded. Allow microphone access and retry.'}
+            </p>
+            <button
+              onClick={() => {
+                setCamPermission('idle');
+                setMicPermission('idle');
+                setMicError('');
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // ── Main gate ──────────────────────────────────────────────────────
-    const isRequesting = camPermission === 'requesting';
+    const isRequesting = camPermission === 'requesting' || micPermission === 'requesting';
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
         <div className="text-center max-w-md px-6">
           <div className="text-6xl mb-6">🖥️</div>
           <h1 className="text-3xl font-bold mb-4">{exam ? exam.title : 'Exam'}</h1>
-          <p className="text-gray-300 mb-2">This exam requires fullscreen mode and webcam access.</p>
+          <p className="text-gray-300 mb-2">This exam requires fullscreen mode, webcam, and microphone access.</p>
           <p className="text-gray-400 text-sm mb-2">
-            AI proctoring monitors your webcam for face presence, phone usage, and gaze direction.
+            AI proctoring monitors webcam presence, phone usage, gaze direction, speech, and sudden noise.
           </p>
+          <p className="text-gray-500 text-xs mb-6">Audio is analyzed locally in your browser; raw audio is not uploaded.</p>
           <p className="text-gray-400 text-sm mb-8">
             All actions are recorded. Violations affect your integrity score.
           </p>
@@ -687,12 +831,25 @@ const ExamTake = () => {
             </span>
           </div>
 
+          <div className="flex items-center justify-center space-x-2 mb-6">
+            <div className={`h-2.5 w-2.5 rounded-full ${
+              micPermission === 'idle' ? 'bg-gray-500' :
+              micPermission === 'requesting' ? 'bg-yellow-400 animate-pulse' :
+              micPermission === 'granted' ? 'bg-green-400' : 'bg-red-500'
+            }`} />
+            <span className="text-sm text-gray-400">
+              {micPermission === 'idle' && 'Microphone Required'}
+              {micPermission === 'requesting' && 'Microphone Connecting…'}
+              {micPermission === 'granted' && 'Microphone Active'}
+            </span>
+          </div>
+
           <button
             onClick={handleStartButton}
             disabled={isRequesting}
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-lg font-semibold px-10 py-4 rounded-xl transition-colors shadow-lg"
           >
-            {isRequesting ? 'Requesting Camera…' : 'Enter Fullscreen & Start Exam'}
+            {isRequesting ? 'Connecting Camera & Microphone…' : 'Enable Camera & Microphone, then Start Exam'}
           </button>
           {!exam && <p className="text-gray-500 text-sm mt-4">Loading exam details…</p>}
         </div>
@@ -769,9 +926,14 @@ const ExamTake = () => {
                 <span>↩ Head Turns</span><span>{r.headTurns}</span>
               </div>
             )}
-            {r.audioViolations > 0 && (
+            {(r.speechDetected ?? 0) > 0 && (
               <div className="flex justify-between text-sm text-orange-400">
-                <span>🎤 Audio/Talking</span><span>{r.audioViolations}</span>
+                <span>🎤 Sustained speech</span><span>{r.speechDetected}</span>
+              </div>
+            )}
+            {(r.noiseSpikes ?? 0) > 0 && (
+              <div className="flex justify-between text-sm text-yellow-400">
+                <span>🔊 Noise spikes</span><span>{r.noiseSpikes}</span>
               </div>
             )}
           </div>
@@ -819,6 +981,14 @@ const ExamTake = () => {
         proctoringReady={proctoringReady}
         existingStream={camStream}
       />
+      {micStream && (
+        <AudioProctor
+          stream={micStream}
+          audioContext={audioContext}
+          disabled={isSubmitting}
+          onViolation={handleAudioViolation}
+        />
+      )}
 
       {/* ── Header ── */}
       <div className="bg-gray-800 text-white px-4 py-2 flex items-center gap-3 flex-wrap shrink-0">

@@ -37,6 +37,8 @@ class EventType(Enum):
     LOOKING_AWAY     = "LOOKING_AWAY"
     HEAD_TURNED_AWAY = "HEAD_TURNED_AWAY"
     PHONE_DETECTED   = "PHONE_DETECTED"
+    SPEECH_DETECTED  = "SPEECH_DETECTED"
+    NOISE_SPIKE      = "NOISE_SPIKE"
 
     # ── Future modules (weights pre-configured in risk_config.py) ─────────
     CHEAT_SHEET      = "CHEAT_SHEET"

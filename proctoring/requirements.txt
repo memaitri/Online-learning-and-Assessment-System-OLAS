@@ -22,3 +22,6 @@ ultralytics==8.4.60
 
 # Numerical
 numpy>=1.26.0
+
+# Audio proctoring
+pyaudio>=0.2.14

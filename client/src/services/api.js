@@ -68,7 +68,7 @@ export const proctoringAPI = {
   start:     (examId)           => api.post('/proctoring/start',     { examId }),
   stop:      (examId)           => api.post('/proctoring/stop',      { examId }),
   frame:     (examId, frame)    => api.post('/proctoring/frame',     { examId, frame }),
-  violation: (examId, type)     => api.post('/proctoring/violation', { examId, type }),
+  violation: (examId, type, metadata = {}) => api.post('/proctoring/violation', { examId, type, metadata }),
   status:    (examId)           => api.get('/proctoring/status',     { params: { examId } }),
   report:    (sessionId)        => api.get(`/proctoring/report/${sessionId}`),
 };

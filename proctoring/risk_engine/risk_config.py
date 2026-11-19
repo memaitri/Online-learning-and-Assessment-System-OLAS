@@ -23,6 +23,8 @@ WEIGHT_MULTIPLE_FACES:   float = 30.0   # another person visible
 WEIGHT_LOOKING_AWAY:     float = 5.0    # eyes off-screen for > threshold
 WEIGHT_HEAD_TURNED_AWAY: float = 8.0    # head turned away for > threshold
 WEIGHT_PHONE_DETECTED:   float = 50.0   # mobile phone visible in frame
+WEIGHT_SPEECH_DETECTED:  float = 10.0   # sustained speech detected via microphone
+WEIGHT_NOISE_SPIKE:      float = 20.0   # sudden loud noise spike via microphone
 
 # Reserved weights for future modules (set 0 to disable):
 WEIGHT_CHEAT_SHEET:      float = 40.0   # cheat sheet / paper detected

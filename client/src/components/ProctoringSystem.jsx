@@ -320,6 +320,14 @@ const ProctoringSystem = ({
                 <span className="text-yellow-400">↩ Head turned</span>
                 <span className="text-yellow-400 font-bold text-right">{riskData.headTurns}×</span>
               </>}
+              {(riskData.speechDetected ?? 0) > 0 && <>
+                <span className="text-orange-400">🎙️ Sustained speech</span>
+                <span className="text-orange-400 font-bold text-right">{riskData.speechDetected}×</span>
+              </>}
+              {(riskData.noiseSpikes ?? 0) > 0 && <>
+                <span className="text-yellow-400">🔊 Noise spikes</span>
+                <span className="text-yellow-400 font-bold text-right">{riskData.noiseSpikes}×</span>
+              </>}
             </div>
           </div>
 

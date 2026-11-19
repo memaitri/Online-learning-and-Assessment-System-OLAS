@@ -279,7 +279,6 @@ class FrameServer:
                 # Headless mode: browser sends ~1 frame/2s, so run YOLO on every frame.
                 frame_skip=config.PHONE_FRAME_SKIP_HEADLESS,
             )
-
             # Background JSON writer (same as main.py)
             self._start_json_writer(risk_service)
 
@@ -370,6 +369,9 @@ class FrameServer:
                     "noFace":          counts.get("NO_FACE", 0),
                     "lookingAway":     counts.get("LOOKING_AWAY", 0),
                     "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                    "audioViolations":  counts.get("SPEECH_DETECTED", 0) + counts.get("NOISE_SPIKE", 0),
+                    "speechDetected":   counts.get("SPEECH_DETECTED", 0),
+                    "noiseSpikes":      counts.get("NOISE_SPIKE", 0),
                     "sessionSeconds":  round(snap.session_seconds, 1),
                     "lastEvent":       snap.last_event,
                     "status":          "running",
@@ -438,6 +440,9 @@ class FrameServer:
                 "noFace":          counts.get("NO_FACE", 0),
                 "lookingAway":     counts.get("LOOKING_AWAY", 0),
                 "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                "audioViolations":  counts.get("SPEECH_DETECTED", 0) + counts.get("NOISE_SPIKE", 0),
+                "speechDetected":   counts.get("SPEECH_DETECTED", 0),
+                "noiseSpikes":      counts.get("NOISE_SPIKE", 0),
                 "gazeDirection":  gaze_results[0].direction.value if gaze_results else "UNKNOWN",
                 "headDirection":  pose_results[0].direction.value if pose_results else "UNKNOWN",
                 "sessionSeconds": round(snap.session_seconds, 1),
@@ -477,6 +482,9 @@ class FrameServer:
                         "noFace":          counts.get("NO_FACE", 0),
                         "lookingAway":     counts.get("LOOKING_AWAY", 0),
                         "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                        "audioViolations":  counts.get("SPEECH_DETECTED", 0) + counts.get("NOISE_SPIKE", 0),
+                        "speechDetected":   counts.get("SPEECH_DETECTED", 0),
+                        "noiseSpikes":      counts.get("NOISE_SPIKE", 0),
                         "sessionSeconds":  round(snap.session_seconds, 1),
                         "lastEvent":       snap.last_event,
                         "status":          "running",
@@ -504,6 +512,9 @@ class FrameServer:
                 "noFace":          counts.get("NO_FACE", 0),
                 "lookingAway":     counts.get("LOOKING_AWAY", 0),
                 "headTurns":       counts.get("HEAD_TURNED_AWAY", 0),
+                "audioViolations":  counts.get("SPEECH_DETECTED", 0) + counts.get("NOISE_SPIKE", 0),
+                "speechDetected":   counts.get("SPEECH_DETECTED", 0),
+                "noiseSpikes":      counts.get("NOISE_SPIKE", 0),
                 "sessionSeconds":  round(report.duration_s, 1),
                 "lastEvent":       "Session ended",
                 "status":          "completed",

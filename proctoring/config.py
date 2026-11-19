@@ -2,6 +2,8 @@
 # Central configuration for the proctoring system.
 # Adjust these values to tune behavior without touching core logic.
 
+import os
+
 # -------------------------------------------------------------------
 # Webcam settings
 # -------------------------------------------------------------------
@@ -226,8 +228,9 @@ RISK_COLOR_CRITICAL: tuple = (0, 0, 255)       # red
 # None = use the system default microphone.
 # Set to an integer (0, 1, 2 …) to select a specific device.
 # Run `python -c "import pyaudio; p=pyaudio.PyAudio(); [print(i, p.get_device_info_by_index(i)['name']) for i in range(p.get_device_count())]"`
-# to list available devices.
-AUDIO_DEVICE_INDEX: int = None        # type: ignore[assignment]
+# to list available devices. OLAS_AUDIO_DEVICE_INDEX can override this at launch.
+_audio_device_index = os.environ.get("OLAS_AUDIO_DEVICE_INDEX", "").strip()
+AUDIO_DEVICE_INDEX: int | None = int(_audio_device_index) if _audio_device_index else None
 
 # Microphone sample rate (Hz).  16 000 Hz is standard for speech detection.
 AUDIO_SAMPLE_RATE: int = 16_000
